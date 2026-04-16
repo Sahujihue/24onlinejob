@@ -1,0 +1,151 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: userId (UID)
+// Fields:
+//   - uid: string (required)
+//   - email: string (required)
+//   - displayName: string
+//   - photoURL: string
+//   - role: string (required, 'user' or 'admin')
+//   - subscriptionStatus: string ('free', 'pro', 'premium')
+//   - subscriptionExpiresAt: timestamp
+//   - savedJobs: list of strings (job IDs)
+//   - createdAt: timestamp
+//
+// Collection: jobs
+// Document ID: jobId
+// Fields:
+//   - title: string (required)
+//   - company: string (required)
+//   - location: string (required)
+//   - country: string
+//   - category: string
+//   - salary: string
+//   - experienceLevel: string
+//   - jobType: string ('Remote', 'On-site', 'Hybrid')
+//   - description: string
+//   - applyUrl: string (required)
+//   - isFeatured: boolean
+//   - isSpam: boolean
+//   - authorUid: string
+//   - imageUrl: string
+//   - createdAt: timestamp
+//
+// Collection: settings
+// Document ID: global
+// Fields:
+//   - siteName: string
+//   - siteDescription: string
+//   - seoTitle: string
+//   - seoDescription: string
+//   - seoKeywords: string
+//   - adsEnabled: boolean
+//   - featuredCountries: list of strings
+//
+// Collection: analytics
+// Document ID: stats
+// Fields:
+//   - totalSearches: number
+//   - apiUsage: map
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isJobOwner() {
+      return isAuthenticated() && resource.data.authorUid == request.auth.uid;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "prsahu5700@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.role in ['user', 'admin'];
+    }
+
+    function isValidJob(data) {
+      return data.keys().hasAll(['title', 'company', 'location', 'applyUrl']) &&
+             data.title is string && data.title.size() < 200 &&
+             data.company is string && data.company.size() < 200 &&
+             data.location is string && data.location.size() < 200 &&
+             data.applyUrl is string && data.applyUrl.size() < 1000 &&
+             (!('authorUid' in data) || data.authorUid is string) &&
+             (!('imageUrl' in data) || data.imageUrl is string);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
+                    (request.resource.data.role == 'user' || (request.resource.data.role == 'admin' && isAdmin()));
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
+                    (request.resource.data.role == resource.data.role || (request.resource.data.role == 'admin' && isAdmin()));
+      allow delete: if isAdmin();
+
+      match /applications/{appId} {
+        allow get, list, write: if isOwner(userId) || isAdmin();
+      }
+
+      match /alerts/{alertId} {
+        allow get, list, write: if isOwner(userId) || isAdmin();
+      }
+    }
+
+    match /jobs/{jobId} {
+      allow get, list: if true; // Jobs are public
+      allow create: if isAuthenticated() && isValidJob(request.resource.data) && 
+                    (request.resource.data.authorUid == request.auth.uid || isAdmin());
+      allow update: if (isAdmin() || isJobOwner()) && isValidJob(request.resource.data);
+      allow delete: if isAdmin() || isJobOwner();
+    }
+
+    match /settings/{settingId} {
+      allow get, list: if settingId != 'api';
+      allow write: if isAdmin();
+      allow get: if settingId == 'api' && isAdmin();
+    }
+
+    match /pages/{pageId} {
+      allow get, list: if true;
+      allow write: if isAdmin();
+    }
+
+    match /transactions/{transactionId} {
+      allow get, list: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /analytics/{analyticId} {
+      allow get, list: if isAdmin();
+      allow write: if isAuthenticated(); // Users can increment search counts
+    }
+  }
+}

@@ -1,0 +1,164 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile and preferences",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "subscriptionStatus": { "type": "string", "enum": ["free", "pro", "premium"] },
+        "subscriptionExpiresAt": { "type": "string", "format": "date-time" },
+        "savedJobs": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Job": {
+      "title": "Job Listing",
+      "description": "Manually added or featured job listing",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "company": { "type": "string" },
+        "location": { "type": "string" },
+        "country": { "type": "string" },
+        "category": { "type": "string" },
+        "salary": { "type": "string" },
+        "experienceLevel": { "type": "string" },
+        "jobType": { "type": "string", "enum": ["Remote", "On-site", "Hybrid"] },
+        "description": { "type": "string" },
+        "applyUrl": { "type": "string" },
+        "isFeatured": { "type": "boolean" },
+        "isSpam": { "type": "boolean" },
+        "authorUid": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "company", "location", "applyUrl"]
+    },
+    "AppSetting": {
+      "title": "App Settings",
+      "description": "Global application settings",
+      "type": "object",
+      "properties": {
+        "siteName": { "type": "string" },
+        "siteDescription": { "type": "string" },
+        "seoTitle": { "type": "string" },
+        "seoDescription": { "type": "string" },
+        "seoKeywords": { "type": "string" },
+        "contactEmail": { "type": "string", "format": "email" },
+        "adsEnabled": { "type": "boolean" },
+        "maintenanceMode": { "type": "boolean" },
+        "featuredCountries": { "type": "array", "items": { "type": "string" } },
+        "socialLinks": {
+          "type": "object",
+          "properties": {
+            "facebook": { "type": "string" },
+            "twitter": { "type": "string" },
+            "linkedin": { "type": "string" },
+            "instagram": { "type": "string" }
+          }
+        },
+        "adsenseConfig": {
+          "type": "object",
+          "properties": {
+            "publisherId": { "type": "string" },
+            "headerSlotId": { "type": "string" },
+            "sidebarSlotId": { "type": "string" },
+            "footerSlotId": { "type": "string" },
+            "jobDetailsSlotId": { "type": "string" }
+          }
+        },
+        "pricingPlans": {
+          "type": "object",
+          "properties": {
+            "free": { "type": "object" },
+            "pro": { "type": "object" },
+            "premium": { "type": "object" }
+          }
+        },
+        "paymentGateways": {
+          "type": "object",
+          "properties": {
+            "stripe": { "type": "object" },
+            "paypal": { "type": "object" },
+            "razorpay": { "type": "object" }
+          }
+        }
+      }
+    },
+    "Analytic": {
+      "title": "Analytics",
+      "description": "Application usage statistics",
+      "type": "object",
+      "properties": {
+        "totalSearches": { "type": "integer" },
+        "apiUsage": { "type": "object" }
+      }
+    },
+    "JobApplication": {
+      "title": "Job Application",
+      "description": "Application tracked by a user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "jobId": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "company": { "type": "string" },
+        "status": { "type": "string", "enum": ["Applied", "Interviewing", "Offered", "Rejected"] },
+        "appliedAt": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" }
+      },
+      "required": ["userId", "jobTitle", "company", "status"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Payment transaction record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "planId": { "type": "string" },
+        "planName": { "type": "string" },
+        "billingCycle": { "type": "string", "enum": ["monthly", "yearly"] },
+        "amount": { "type": "number" },
+        "currency": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "paymentMethod": { "type": "string" },
+        "transactionId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "planId", "amount", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/jobs/{jobId}": {
+      "schema": "Job",
+      "description": "Job listings"
+    },
+    "/settings/global": {
+      "schema": "AppSetting",
+      "description": "Global app settings"
+    },
+    "/analytics/stats": {
+      "schema": "Analytic",
+      "description": "App analytics"
+    },
+    "/users/{userId}/applications/{applicationId}": {
+      "schema": "JobApplication",
+      "description": "User's job applications"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Payment transactions"
+    }
+  }
+}

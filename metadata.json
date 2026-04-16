@@ -1,0 +1,7 @@
+{
+  "name": "24OnlineJob.com",
+  "description": "24OnlineJob.com is a professional global job search platform featuring millions of live listings, advanced filters, and personalized job alerts to help you find your dream career anywhere in the world.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
