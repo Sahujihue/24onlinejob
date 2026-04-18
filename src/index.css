@@ -132,4 +132,14 @@
     transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     color-scheme: light dark;
   }
+
+  /* Improved form element visibility in dark mode */
+  select, option, input, textarea {
+    @apply bg-background text-foreground;
+  }
+
+  /* Force option background in dark mode for browsers that support it */
+  .dark select option {
+    @apply bg-card text-foreground;
+  }
 }

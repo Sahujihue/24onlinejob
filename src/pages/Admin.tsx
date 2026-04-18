@@ -943,7 +943,7 @@ export default function Admin() {
                         <td className="px-6 py-4">
                           <select 
                             value={u.role || 'user'}
-                            disabled={profile?.role !== 'admin'}
+                            disabled={profile?.role !== 'admin' && profile?.role !== 'moderator'}
                             onChange={async (e) => {
                               const newRole = e.target.value;
                               try {
@@ -951,9 +951,10 @@ export default function Admin() {
                                 setUsersList(usersList.map(user => user.id === u.id ? { ...user, role: newRole } : user));
                               } catch (error) {
                                 console.error('Error updating user role:', error);
+                                alert('Error updating user role. Please try again.');
                               }
                             }}
-                            className="bg-transparent border-none text-sm font-medium focus:ring-0 cursor-pointer"
+                            className="bg-background border rounded px-2 py-1 text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none cursor-pointer hover:bg-muted/50 transition-colors"
                           >
                             <option value="user">User</option>
                             <option value="moderator">Moderator</option>
@@ -972,9 +973,9 @@ export default function Admin() {
                         <td className="px-6 py-4">
                           <button 
                             onClick={() => setUserToDelete(u.id)}
-                            disabled={profile?.role !== 'admin'}
-                            className={`transition-colors ${profile?.role === 'admin' ? 'text-destructive hover:text-destructive/80' : 'text-muted-foreground cursor-not-allowed opacity-50'}`}
-                            title={profile?.role === 'admin' ? "Delete User" : "Only admins can delete users"}
+                            disabled={profile?.role !== 'admin' && profile?.role !== 'moderator'}
+                            className={`transition-colors ${profile?.role === 'admin' || profile?.role === 'moderator' ? 'text-destructive hover:text-destructive/80' : 'text-muted-foreground cursor-not-allowed opacity-50'}`}
+                            title={profile?.role === 'admin' || profile?.role === 'moderator' ? "Delete User" : "Only admins can delete users"}
                           >
                             <Trash2 size={18} />
                           </button>
@@ -1808,12 +1809,6 @@ export default function Admin() {
                       onChange={e => setSettings({...settings, socialLinks: {...settings.socialLinks, twitter: e.target.value}})}
                     />
                     <input 
-                      type="text" placeholder="LinkedIn URL"
-                      className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
-                      value={settings.socialLinks.linkedin}
-                      onChange={e => setSettings({...settings, socialLinks: {...settings.socialLinks, linkedin: e.target.value}})}
-                    />
-                    <input 
                       type="text" placeholder="Instagram URL"
                       className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
                       value={settings.socialLinks.instagram}
@@ -2124,7 +2119,7 @@ export default function Admin() {
                           <td className="py-3 px-2">
                             <input 
                               type="text"
-                              className="w-full bg-transparent border-none focus:ring-0 p-0 text-sm font-medium"
+                              className="w-full bg-background border rounded px-1 transition-colors focus:ring-1 focus:ring-primary/30 p-1 text-sm font-medium"
                               value={row.name}
                               onChange={e => {
                                 const newTable = [...settings.comparisonTable];
@@ -2577,18 +2572,26 @@ export default function Admin() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Job Title</label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-sm font-medium">Job Title</label>
+                      <span className="text-[10px] text-muted-foreground font-mono">{(jobForm.title || '').length}/100</span>
+                    </div>
                     <input 
                       type="text" required
+                      maxLength={100}
                       className="w-full px-4 py-2 rounded-lg border bg-background"
                       value={jobForm.title}
                       onChange={e => setJobForm({...jobForm, title: e.target.value})}
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Company Name</label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-sm font-medium">Company Name</label>
+                      <span className="text-[10px] text-muted-foreground font-mono">{(jobForm.company || '').length}/100</span>
+                    </div>
                     <input 
                       type="text" required
+                      maxLength={100}
                       className="w-full px-4 py-2 rounded-lg border bg-background"
                       value={jobForm.company}
                       onChange={e => setJobForm({...jobForm, company: e.target.value})}

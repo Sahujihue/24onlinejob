@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth';
 import { db } from '../firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { motion } from 'framer-motion';
-import { User, Mail, Camera, Save, Loader2, ShieldCheck, Zap, LogOut, Plus, X, Tag } from 'lucide-react';
+import { User, Mail, Camera, Save, Loader2, ShieldCheck, Zap, LogOut, Plus, X, Tag, MapPin, Phone, Globe, Sparkles, CheckCircle2, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function Profile() {
@@ -23,14 +23,41 @@ export default function Profile() {
   const [newKeyword, setNewKeyword] = useState('');
 
   useEffect(() => {
+    if (!authLoading && profile) {
+      const handleHashScroll = () => {
+        const hash = window.location.hash;
+        if (hash) {
+          const id = hash.replace('#', '');
+          const element = document.getElementById(id);
+          if (element) {
+            // Small delay to ensure rendering is complete
+            setTimeout(() => {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              // Highlight the targeted field
+              element.classList.add('ring-4', 'ring-primary/30', 'ring-offset-2');
+              setTimeout(() => {
+                element.classList.remove('ring-4', 'ring-primary/30', 'ring-offset-2');
+              }, 3000);
+            }, 300);
+          }
+        }
+      };
+
+      handleHashScroll();
+      window.addEventListener('hashchange', handleHashScroll);
+      return () => window.removeEventListener('hashchange', handleHashScroll);
+    }
+  }, [authLoading, profile]);
+
+  useEffect(() => {
     if (profile) {
       setFormData({
         displayName: profile.displayName || '',
         photoURL: profile.photoURL || '',
-        phoneNumber: (profile as any).phoneNumber || '',
-        bio: (profile as any).bio || '',
-        location: (profile as any).location || '',
-        website: (profile as any).website || '',
+        phoneNumber: profile.phoneNumber || '',
+        bio: profile.bio || '',
+        location: profile.location || '',
+        website: profile.website || '',
         preferredKeywords: profile.preferredKeywords || []
       });
     }
@@ -101,6 +128,34 @@ export default function Profile() {
     }
   };
 
+  const calculateStrength = () => {
+    let score = 0;
+    const items = [
+      { key: 'displayName', weight: 15, label: 'Full Name' },
+      { key: 'photoURL', weight: 15, label: 'Profile Picture' },
+      { key: 'location', weight: 15, label: 'Location' },
+      { key: 'bio', weight: 20, label: 'Bio' },
+      { key: 'phoneNumber', weight: 10, label: 'Phone Number' },
+      { key: 'website', weight: 10, label: 'Website' },
+      { key: 'preferredKeywords', weight: 15, label: 'Keywords/Skills' }
+    ];
+
+    const missing = [];
+    
+    for (const item of items) {
+      const val = formData[item.key as keyof typeof formData];
+      if (Array.isArray(val) ? val.length > 0 : !!val) {
+        score += item.weight;
+      } else {
+        missing.push(item);
+      }
+    }
+
+    return { score, missing };
+  };
+
+  const { score, missing } = calculateStrength();
+
   return (
     <div className="container mx-auto px-4 py-12 max-w-4xl">
       <motion.div 
@@ -155,6 +210,53 @@ export default function Profile() {
               </div>
             </div>
 
+            <div className="bg-card p-6 rounded-3xl border shadow-sm space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">Profile Strength</h3>
+                <span className={`text-sm font-bold ${score === 100 ? 'text-emerald-500' : 'text-primary'}`}>{score}%</span>
+              </div>
+              
+              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${score}%` }}
+                  className={`h-full transition-all duration-1000 ${score === 100 ? 'bg-emerald-500' : 'bg-primary'}`}
+                />
+              </div>
+
+              {missing.length > 0 ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground">Complete these to get better recommendations:</p>
+                  <div className="space-y-2">
+                    {missing.slice(0, 3).map(item => (
+                      <button 
+                        key={item.key}
+                        onClick={() => {
+                          const element = document.getElementById(item.key);
+                          if (element) {
+                            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            element.classList.add('ring-4', 'ring-primary/30', 'ring-offset-2');
+                            setTimeout(() => {
+                              element.classList.remove('ring-4', 'ring-primary/30', 'ring-offset-2');
+                            }, 2000);
+                          }
+                        }}
+                        className="w-full flex items-center gap-2 text-[11px] font-medium text-foreground p-2 rounded-lg bg-muted/30 border border-transparent hover:border-primary/20 transition-all hover:bg-muted/50"
+                      >
+                        <Plus size={12} className="text-primary" />
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600">
+                  <CheckCircle2 size={16} />
+                  <span className="text-xs font-bold">Profile complete!</span>
+                </div>
+              )}
+            </div>
+
             <div className="bg-card p-6 rounded-3xl border shadow-sm space-y-4">
               <h3 className="font-bold text-sm uppercase tracking-wider text-muted-foreground">Account Status</h3>
               <div className="space-y-3">
@@ -177,7 +279,7 @@ export default function Profile() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Full Name</label>
-                    <div className="relative">
+                    <div className="relative" id="displayName">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                       <input 
                         type="text"
@@ -202,23 +304,29 @@ export default function Profile() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Location</label>
-                    <input 
-                      type="text"
-                      className="w-full px-4 py-2.5 rounded-xl border bg-background focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                      value={formData.location}
-                      onChange={e => setFormData({...formData, location: e.target.value})}
-                      placeholder="City, Country"
-                    />
+                    <div className="relative" id="location">
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                      <input 
+                        type="text"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border bg-background focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                        value={formData.location}
+                        onChange={e => setFormData({...formData, location: e.target.value})}
+                        placeholder="City, Country"
+                      />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Phone Number</label>
-                    <input 
-                      type="tel"
-                      className="w-full px-4 py-2.5 rounded-xl border bg-background focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                      value={formData.phoneNumber}
-                      onChange={e => setFormData({...formData, phoneNumber: e.target.value})}
-                      placeholder="+1 (234) 567-890"
-                    />
+                    <div className="relative" id="phoneNumber">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                      <input 
+                        type="tel"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border bg-background focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                        value={formData.phoneNumber}
+                        onChange={e => setFormData({...formData, phoneNumber: e.target.value})}
+                        placeholder="+1 (234) 567-890"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -227,7 +335,7 @@ export default function Profile() {
                     <label className="text-sm font-medium">Profile Picture URL</label>
                     <span className="text-[10px] text-muted-foreground">Recommended: 400 x 400 px</span>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2" id="photoURL">
                     <div className="relative flex-1">
                       <Camera className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
                       <input 
@@ -249,6 +357,7 @@ export default function Profile() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Bio</label>
                   <textarea 
+                    id="bio"
                     rows={4}
                     className="w-full px-4 py-2.5 rounded-xl border bg-background focus:ring-2 focus:ring-primary/20 outline-none transition-all resize-none"
                     value={formData.bio}
@@ -259,13 +368,16 @@ export default function Profile() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Website / Portfolio</label>
-                  <input 
-                    type="url"
-                    className="w-full px-4 py-2.5 rounded-xl border bg-background focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                    value={formData.website}
-                    onChange={e => setFormData({...formData, website: e.target.value})}
-                    placeholder="https://yourportfolio.com"
-                  />
+                  <div className="relative" id="website">
+                    <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+                    <input 
+                      type="url"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border bg-background focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                      value={formData.website}
+                      onChange={e => setFormData({...formData, website: e.target.value})}
+                      placeholder="https://yourportfolio.com"
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-4">
@@ -277,7 +389,7 @@ export default function Profile() {
                     <span className="text-[10px] text-muted-foreground">Used for personalized recommendations</span>
                   </div>
                   
-                  <div className="flex gap-2">
+                  <div className="flex gap-2" id="preferredKeywords">
                     <input 
                       type="text"
                       className="flex-1 px-4 py-2.5 rounded-xl border bg-background focus:ring-2 focus:ring-primary/20 outline-none transition-all"

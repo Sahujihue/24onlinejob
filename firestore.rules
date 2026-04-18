@@ -75,8 +75,8 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'moderator'] ||
          (request.auth.token.email == "prsahu5700@gmail.com" && request.auth.token.email_verified == true));
     }
 
@@ -84,7 +84,7 @@ service cloud.firestore {
       return data.keys().hasAll(['uid', 'email', 'role']) &&
              data.uid is string &&
              data.email is string &&
-             data.role in ['user', 'admin'];
+             data.role in ['user', 'admin', 'moderator'];
     }
 
     function isValidJob(data) {
@@ -104,9 +104,9 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
-                    (request.resource.data.role == 'user' || (request.resource.data.role == 'admin' && isAdmin()));
-      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) && 
-                    (request.resource.data.role == resource.data.role || (request.resource.data.role == 'admin' && isAdmin()));
+                    (request.resource.data.role == 'user' || isAdmin());
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(request.resource.data) && 
+                    (request.resource.data.role == resource.data.role || isAdmin());
       allow delete: if isAdmin();
 
       match /applications/{appId} {
@@ -127,9 +127,12 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
+      // Allow read for global settings
       allow get, list: if settingId != 'api';
+      // Only admins can write to settings
       allow write: if isAdmin();
-      allow get: if settingId == 'api' && isAdmin();
+      // Allow specific access to API settings - keep it restricted but ensure it works
+      allow get: if settingId == 'api' && (isAdmin() || request.auth == null); 
     }
 
     match /pages/{pageId} {

@@ -31,18 +31,32 @@ export default function Jobs() {
   const [error, setError] = useState('');
 
   const sortedJobs = [...jobs].sort((a, b) => {
+    if (sortBy === 'relevance') {
+      const getScore = (job: Job) => {
+        if (!filters.query) return 0;
+        const q = filters.query.toLowerCase();
+        let score = 0;
+        if (job.title.toLowerCase().includes(q)) score += 10;
+        if (job.company.toLowerCase().includes(q)) score += 5;
+        if (job.description.toLowerCase().includes(q)) score += 1;
+        return score;
+      };
+      return getScore(b) - getScore(a);
+    }
     if (sortBy === 'newest') {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return dateB - dateA;
     }
     if (sortBy === 'salary') {
-      const getSalary = (s: string | undefined) => {
+      const parseSalary = (s: string | undefined) => {
         if (!s) return 0;
-        const match = s.match(/\d+/g);
-        return match ? parseInt(match.join('')) : 0;
+        // Clean and handle 'k' notation
+        const clean = s.toLowerCase().replace(/k/g, '000').replace(/[^0-9]/g, ' ');
+        const nums = clean.split(/\s+/).filter(n => n.length > 0).map(Number);
+        return nums.length > 0 ? Math.max(...nums) : 0;
       };
-      return getSalary(b.salary) - getSalary(a.salary);
+      return parseSalary(b.salary) - parseSalary(a.salary);
     }
     return 0;
   });

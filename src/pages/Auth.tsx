@@ -3,13 +3,17 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
-import { Mail, Lock, Chrome, ArrowRight, Github } from 'lucide-react';
+import { Mail, Lock, Chrome, ArrowRight, Github, Eye, EyeOff, User } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { getAuthErrorMessage } from '../lib/error-messages';
+import { updateProfile } from 'firebase/auth';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { user, loading: authLoading } = useAuth();
@@ -32,7 +36,7 @@ export default function Auth() {
       await signInWithPopup(auth, googleProvider);
       navigate(redirect);
     } catch (err: any) {
-      setError(err.message);
+      setError(getAuthErrorMessage(err.code));
     }
   };
 
@@ -47,13 +51,17 @@ export default function Auth() {
         navigate(redirect);
       } else {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Set display name
+        if (name.trim()) {
+          await updateProfile(userCredential.user, { displayName: name.trim() });
+        }
         // Send verification email immediately after signup
         await sendEmailVerification(userCredential.user);
         // Redirect to verification page
         navigate('/verify-email');
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(getAuthErrorMessage(err.code));
     } finally {
       setLoading(false);
     }
@@ -80,14 +88,31 @@ export default function Auth() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {!isLogin && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Full Name</label>
+              <div className="relative group">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
+                <input
+                  type="text"
+                  required
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  placeholder="Your Name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="text-sm font-medium">Email Address</label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+            <div className="relative group">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
               <input
                 type="email"
                 required
-                className="w-full pl-10 pr-4 py-2 rounded-lg border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -97,16 +122,24 @@ export default function Auth() {
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+            <div className="relative group">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" size={18} />
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
-                className="w-full pl-10 pr-4 py-2 rounded-lg border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none"
+                className="w-full pl-10 pr-12 py-2.5 rounded-xl border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
+                title={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
             {isLogin && (
               <div className="flex justify-end">

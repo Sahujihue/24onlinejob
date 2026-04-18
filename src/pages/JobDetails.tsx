@@ -1,5 +1,5 @@
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
-import { MapPin, Building2, Calendar, ExternalLink, ArrowLeft, Bookmark, BookmarkCheck, Share2, Briefcase, CheckCircle2, Plus, History, Loader2 } from 'lucide-react';
+import { MapPin, Building2, Calendar, ExternalLink, ArrowLeft, Bookmark, BookmarkCheck, Share2, Briefcase, CheckCircle2, Plus, History, Loader2, AlertCircle } from 'lucide-react';
 import { Job } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { motion } from 'framer-motion';
@@ -8,7 +8,7 @@ import ShareModal from '../components/ShareModal';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../firebase';
 import { doc, updateDoc, arrayUnion, arrayRemove, getDoc, addDoc, collection } from 'firebase/firestore';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function JobDetails() {
   const { id } = useParams();
@@ -20,6 +20,7 @@ export default function JobDetails() {
   const [isSaving, setIsSaving] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
   const [loading, setLoading] = useState(!job);
+  
   const isSaved = profile?.savedJobs.includes(job?.id || '');
 
   useEffect(() => {
@@ -168,7 +169,8 @@ export default function JobDetails() {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => {
-                  if (user && (!job.source || job.source === 'Manual')) {
+                  const isManual = !job.source || job.source === 'Manual';
+                  if (user && isManual) {
                     trackApplication();
                   }
                 }}

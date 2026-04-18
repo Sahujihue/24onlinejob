@@ -12,7 +12,7 @@ import {
   Loader2, CreditCard, CheckCircle2, Image as ImageIcon,
   X, Save, Zap, Star, ShieldCheck, DollarSign, History,
   Clock, CheckCircle, XCircle, AlertCircle, Bell, Settings2,
-  Sparkles, RefreshCw, LogOut
+  Sparkles, RefreshCw, LogOut, ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -85,6 +85,34 @@ export default function UserDashboard() {
   });
 
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+
+  const calculateProfileStrength = () => {
+    if (!profile) return { score: 0, missing: [] };
+    
+    let score = 0;
+    const items = [
+      { key: 'displayName', weight: 15, label: 'Full Name' },
+      { key: 'photoURL', weight: 15, label: 'Profile Picture' },
+      { key: 'location', weight: 15, label: 'Location' },
+      { key: 'bio', weight: 20, label: 'Bio' },
+      { key: 'phoneNumber', weight: 10, label: 'Phone Number' },
+      { key: 'website', weight: 10, label: 'Website' },
+      { key: 'preferredKeywords', weight: 15, label: 'Keywords/Skills' }
+    ];
+
+    const missing = [];
+    for (const item of items) {
+      const val = profile[item.key as keyof typeof profile];
+      if (Array.isArray(val) ? val.length > 0 : !!val) {
+        score += item.weight;
+      } else {
+        missing.push(item);
+      }
+    }
+    return { score, missing };
+  };
+
+  const profileStrength = calculateProfileStrength();
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -385,6 +413,53 @@ export default function UserDashboard() {
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="md:col-span-2 space-y-8">
+            {profileStrength.score < 100 && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-6 rounded-3xl border bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-primary/20 flex flex-col sm:flex-row items-center justify-between gap-6 overflow-hidden relative group"
+              >
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-120 transition-transform duration-500">
+                  <User size={120} />
+                </div>
+                <div className="space-y-2 relative">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-primary/20 rounded-lg">
+                      <Sparkles size={16} className="text-primary" />
+                    </div>
+                    <h3 className="font-bold text-lg">Complete Your Profile</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground max-w-sm">
+                    A complete profile helps us suggest better jobs for you. You're currently at {profileStrength.score}% strength.
+                  </p>
+                </div>
+                <div className="flex items-center gap-4 relative">
+                  <div className="text-right hidden sm:block">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-1 text-primary/60">Help us find better jobs</p>
+                    <div className="flex flex-wrap gap-1.5 justify-end max-w-[250px]">
+                      {profileStrength.missing.map((item) => (
+                        <button 
+                          key={item.key}
+                          onClick={() => navigate(`/profile#${item.key}`)}
+                          className="text-[10px] bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 px-2.5 py-1 rounded-full font-bold transition-all hover:scale-105 active:scale-95"
+                          title={`Click to fill ${item.label}`}
+                        >
+                          + {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => navigate('/profile')}
+                    className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 whitespace-nowrap"
+                  >
+                    Complete Profile
+                    <ArrowRight size={18} />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
             <div className="p-8 rounded-3xl border bg-card space-y-6">
               <h2 className="text-xl font-bold">Your Subscription</h2>
               <div className="flex items-center justify-between p-6 rounded-2xl bg-muted/30 border">
@@ -1356,18 +1431,26 @@ export default function UserDashboard() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Job Title</label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-sm font-medium">Job Title</label>
+                      <span className="text-[10px] text-muted-foreground font-mono">{(jobForm.title || '').length}/100</span>
+                    </div>
                     <input 
                       type="text" required
+                      maxLength={100}
                       className="w-full px-4 py-2 rounded-lg border bg-background"
                       value={jobForm.title}
                       onChange={e => setJobForm({...jobForm, title: e.target.value})}
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Company Name</label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-sm font-medium">Company Name</label>
+                      <span className="text-[10px] text-muted-foreground font-mono">{(jobForm.company || '').length}/100</span>
+                    </div>
                     <input 
                       type="text" required
+                      maxLength={100}
                       className="w-full px-4 py-2 rounded-lg border bg-background"
                       value={jobForm.company}
                       onChange={e => setJobForm({...jobForm, company: e.target.value})}

@@ -26,6 +26,10 @@ export interface UserProfile {
   email: string;
   displayName?: string;
   photoURL?: string;
+  location?: string;
+  bio?: string;
+  phoneNumber?: string;
+  website?: string;
   role: 'user' | 'admin' | 'moderator';
   subscriptionStatus?: 'free' | 'pro' | 'premium';
   subscriptionExpiresAt?: string;

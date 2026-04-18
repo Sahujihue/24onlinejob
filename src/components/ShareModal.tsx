@@ -1,4 +1,4 @@
-import { X, Copy, Check, Facebook, Linkedin, MessageCircle } from 'lucide-react';
+import { X, Copy, Check, Facebook, MessageCircle } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -35,12 +35,6 @@ export default function ShareModal({ isOpen, onClose, url, title }: ShareModalPr
       icon: Facebook,
       color: 'bg-[#1877F2]',
       href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`
-    },
-    {
-      name: 'LinkedIn',
-      icon: Linkedin,
-      color: 'bg-[#0A66C2]',
-      href: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`
     },
     {
       name: 'WhatsApp',

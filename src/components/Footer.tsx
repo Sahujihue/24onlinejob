@@ -67,11 +67,6 @@ export default function Footer() {
                   <XIcon size={18} />
                 </a>
               )}
-              {settings.socialLinks.linkedin && (
-                <a href={settings.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center hover:bg-primary hover:text-white transition-all">
-                  <Linkedin size={18} />
-                </a>
-              )}
               {settings.socialLinks.instagram && (
                 <a href={settings.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center hover:bg-primary hover:text-white transition-all">
                   <Instagram size={18} />

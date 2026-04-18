@@ -20,7 +20,6 @@ export interface AppSettings {
   socialLinks: {
     facebook: string;
     twitter: string;
-    linkedin: string;
     instagram: string;
   };
   adsenseConfig: {
@@ -85,7 +84,6 @@ const defaultSettings: AppSettings = {
   socialLinks: {
     facebook: '',
     twitter: '',
-    linkedin: '',
     instagram: ''
   },
   adsenseConfig: {

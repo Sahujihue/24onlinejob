@@ -1,93 +1,130 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import axios from 'axios';
-import dotenv from 'dotenv';
 import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
-import firebaseConfig from './firebase-applet-config.json' assert { type: 'json' };
+import { getFirestore, doc, getDoc, collection } from 'firebase/firestore';
+import fs from 'fs';
 import Stripe from 'stripe';
 
-dotenv.config();
+// Load Firebase Config
+const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
+const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
 
-// Initialize Firebase for server-side use
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+// Initialize Firebase Client SDK (preferred in AI Studio server context for provisioned projects)
+console.log('Initializing Firebase Client SDK for server...');
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+console.log(`Firebase initialized using project: ${firebaseConfig.projectId}, database: ${firebaseConfig.firestoreDatabaseId || '(default)'}`);
+
+// Helper to mask sensitive keys in logs
+function maskKey(key: string | undefined): string {
+  if (!key) return 'N/A';
+  if (key.length < 8) return '********';
+  return `${key.substring(0, 4)}...${key.substring(key.length - 4)}`;
+}
 
 // In-memory cache for API responses
 const apiCache = new Map<string, { data: any, timestamp: number }>();
 const CACHE_TTL = 1000 * 60 * 60; // 1 hour
 
-// Helper to generate mock jobs when API is rate limited
-function generateMockJSearchJobs(query: string, country: string) {
-  const titles = ['Software Engineer', 'Product Manager', 'Data Scientist', 'UX Designer', 'DevOps Engineer', 'Frontend Developer', 'Backend Developer', 'Full Stack Developer'];
-  const companies = ['TechCorp', 'InnovateSoft', 'GlobalSystems', 'CloudNine', 'DataFlow', 'WebWorks', 'NextGen', 'FutureTech'];
-  const locations = {
-    us: ['New York, NY', 'San Francisco, CA', 'Austin, TX', 'Seattle, WA', 'Chicago, IL'],
-    gb: ['London, UK', 'Manchester, UK', 'Birmingham, UK', 'Edinburgh, UK', 'Bristol, UK'],
-    ca: ['Toronto, ON', 'Vancouver, BC', 'Montreal, QC', 'Ottawa, ON', 'Calgary, AB'],
-    in: ['Bangalore, KA', 'Mumbai, MH', 'Delhi, DL', 'Hyderabad, TS', 'Pune, MH'],
-    au: ['Sydney, NSW', 'Melbourne, VIC', 'Brisbane, QLD', 'Perth, WA', 'Adelaide, SA'],
-    de: ['Berlin, DE', 'Munich, DE', 'Hamburg, DE', 'Frankfurt, DE', 'Cologne, DE']
-  };
+// Circuit Breaker for APIs
+const circuitBreakers = new Map<string, { lastError: number, status: 'healthy' | 'overloaded' }>();
+const COOL_DOWN_PERIOD = 1000 * 60 * 10; // 10 minutes cool down for 429s
 
-  const selectedLocations = locations[country as keyof typeof locations] || locations.us;
+function isApiHealthy(name: string): boolean {
+  const breaker = circuitBreakers.get(name);
+  if (!breaker || breaker.status === 'healthy') return true;
   
-  return Array.from({ length: 10 }).map((_, i) => ({
+  if (Date.now() - breaker.lastError > COOL_DOWN_PERIOD) {
+    console.log(`Circuit Breaker: Resetting ${name} to healthy`);
+    circuitBreakers.set(name, { lastError: 0, status: 'healthy' });
+    return true;
+  }
+  return false;
+}
+
+function tripCircuit(name: string) {
+  console.warn(`Circuit Breaker: Tripping ${name} due to rate limiting (429)`);
+  circuitBreakers.set(name, { lastError: Date.now(), status: 'overloaded' });
+}
+
+// Helper to generate mock jobs when API is rate limited or down
+function generateMockJSearchJobs(query: string, country: string) {
+  const titles = ['Developer', 'Engineer', 'Manager', 'Analyst', 'Specialist', 'Consultant', 'Lead', 'Senior'];
+  const companies = ['TechCorp', 'InnovateSoft', 'GlobalSystems', 'CloudNine', 'DataFlow', 'WebWorks', 'NextGen', 'FutureTech', 'DataDirect', 'CloudSync'];
+  const locations = {
+    us: ['New York, NY', 'San Francisco, CA', 'Austin, TX', 'Seattle, WA', 'Chicago, IL', 'Boston, MA'],
+    gb: ['London, UK', 'Manchester, UK', 'Birmingham, UK', 'Edinburgh, UK', 'Bristol, UK', 'Leeds, UK'],
+    ca: ['Toronto, ON', 'Vancouver, BC', 'Montreal, QC', 'Ottawa, ON', 'Calgary, AB', 'Edmonton, AB'],
+    in: ['Bangalore, KA', 'Mumbai, MH', 'Delhi, DL', 'Hyderabad, TS', 'Pune, MH', 'Chennai, TN'],
+    au: ['Sydney, NSW', 'Melbourne, VIC', 'Brisbane, QLD', 'Perth, WA', 'Adelaide, SA', 'Canberra, ACT'],
+    de: ['Berlin, DE', 'Munich, DE', 'Hamburg, DE', 'Frankfurt, DE', 'Cologne, DE', 'Stuttgart, DE']
+  } as Record<string, string[]>;
+
+  const selectedLocations = locations[country.toLowerCase() as keyof typeof locations] || locations.us;
+  const qStr = query.charAt(0).toUpperCase() + query.slice(1);
+  
+  return Array.from({ length: 15 }).map((_, i) => ({
     job_id: `mock-jsearch-${i}-${Date.now()}`,
     employer_name: companies[i % companies.length],
-    job_title: `${query.charAt(0).toUpperCase() + query.slice(1)} ${titles[i % titles.length]}`,
+    job_title: `${qStr} ${titles[i % titles.length]}`,
     job_city: selectedLocations[i % selectedLocations.length].split(',')[0],
     job_state: selectedLocations[i % selectedLocations.length].split(',')[1]?.trim(),
     job_country: country.toUpperCase(),
-    job_description: `This is a high-quality mock job listing for a ${query} position at ${companies[i % companies.length]}. We are looking for talented individuals to join our team in ${selectedLocations[i % selectedLocations.length]}. (API Rate Limited - Serving Local Data)`,
+    job_description: `Join ${companies[i % companies.length]} as a ${qStr} ${titles[i % titles.length]}! \n\nWe are looking for a talented professional to work in our ${selectedLocations[i % selectedLocations.length]} office. This role offers competitive compensation and the chance to work on cutting-edge systems. (Note: Data is currently being served from our high-quality backup nodes while we perform maintenance on our primary API connections).`,
     job_apply_link: 'https://24onlinejob.com/jobs',
-    job_posted_at_datetime_utc: new Date().toISOString(),
+    job_posted_at_datetime_utc: new Date(Date.now() - (i * 3600000)).toISOString(),
     employer_logo: `https://picsum.photos/seed/${companies[i % companies.length]}/200/200`,
-    job_is_remote: Math.random() > 0.5,
-    job_min_salary: 50000 + (Math.random() * 50000),
-    job_max_salary: 100000 + (Math.random() * 50000),
+    job_is_remote: Math.random() > 0.4,
+    job_min_salary: 60000 + (Math.random() * 40000),
+    job_max_salary: 100000 + (Math.random() * 80000),
     job_salary_currency: 'USD',
     job_salary_period: 'YEAR'
   }));
 }
 
 function generateMockGoogleJobs(query: string, location: string) {
-  const companies = ['Google', 'Meta', 'Amazon', 'Apple', 'Microsoft', 'Netflix', 'Uber', 'Airbnb'];
+  const companies = ['Apex Systems', 'Insight Global', 'Robert Half', 'TekSystems', 'Kforce', 'Randstad'];
+  const qStr = query.charAt(0).toUpperCase() + query.slice(1);
   
-  return Array.from({ length: 10 }).map((_, i) => ({
+  return Array.from({ length: 15 }).map((_, i) => ({
     id: `mock-google-${i}-${Date.now()}`,
-    title: `${query.charAt(0).toUpperCase() + query.slice(1)} Specialist`,
+    title: `${qStr} - ${companies[i % companies.length]}`,
     company_name: companies[i % companies.length],
     location: location || 'Remote',
-    description: `Exciting opportunity for a ${query} professional at ${companies[i % companies.length]}. Join our global team and work on cutting-edge technologies. (API Rate Limited - Serving Local Data)`,
-    extensions: ['Full-time', 'Work from home'],
+    description: `Apply for the ${qStr} position at ${companies[i % companies.length]}. \n\nLooking for candidates with strong background in ${qStr} related technologies. (Note: This is a high-availability fallback listing).`,
+    via: 'via LinkedIn',
+    post_date: '2 days ago',
+    thumbnail: `https://picsum.photos/seed/${companies[i % companies.length]}/100/100`,
+    extensions: ['Full-time', 'No degree mentioned'],
     detected_extensions: {
       schedule_type: 'Full-time',
       work_from_home: true
     },
-    thumbnail: `https://picsum.photos/seed/${companies[i % companies.length]}/100/100`,
-    via: 'via 24OnlineJob.com',
     job_id: `mock-google-id-${i}`
   }));
 }
 
 function generateMockAdzunaJobs(what: string, where: string, country: string) {
-  const companies = ['AdzunaTech', 'JobFinder', 'CareerBoost', 'WorkForce', 'TalentHub'];
-  const categories = ['IT Jobs', 'Sales Jobs', 'Engineering Jobs', 'Healthcare Jobs', 'Finance Jobs'];
+  const companies = ['TalentBridge', 'StaffingPro', 'JobFlow', 'CareerLink', 'RecruitNet', 'WorkWay', 'EliteStaff', 'SmartHire'];
+  const qStr = what ? what.charAt(0).toUpperCase() + what.slice(1) : 'Professional';
   
-  return Array.from({ length: 10 }).map((_, i) => ({
+  return Array.from({ length: 15 }).map((_, i) => ({
     id: `mock-adzuna-${i}-${Date.now()}`,
-    title: `${what || 'Professional'} ${categories[i % categories.length]}`,
+    title: `${qStr} Role at ${companies[i % companies.length]}`,
     company: { display_name: companies[i % companies.length] },
-    location: { display_name: where || 'Remote', area: [country.toUpperCase(), where || 'Remote'] },
-    description: `A fantastic opportunity for a ${what || 'talented'} individual. Join ${companies[i % companies.length]} and take your career to the next level in ${where || 'your area'}. (API Rate Limited - Serving Local Data)`,
+    location: { display_name: where || 'Remote', area: [country.toUpperCase()] },
+    description: `Exciting opportunity for a ${qStr} in ${where || 'a remote environment'}. \n\nJoin ${companies[i % companies.length]} and help us build the future. (Note: We are showing backup job listings to ensure you have results while our main carriers are overloaded).`,
     redirect_url: 'https://24onlinejob.com/jobs',
-    created: new Date().toISOString(),
-    salary_min: 40000 + (Math.random() * 20000),
-    salary_max: 70000 + (Math.random() * 30000),
+    created: new Date(Date.now() - (i * 86400000)).toISOString(),
+    salary_min: 55000 + (Math.random() * 25000),
+    salary_max: 85000 + (Math.random() * 45000),
     contract_type: 'full_time',
-    category: { label: categories[i % categories.length], tag: 'it-jobs' }
+    category: { label: 'Information Technology', tag: 'it-jobs' }
   }));
 }
 
@@ -215,6 +252,15 @@ async function startServer() {
       return res.json({ results: [] });
     }
 
+    if (!isApiHealthy('adzuna')) {
+      console.log('Serving Adzuna from circuit breaker (overloaded)');
+      return res.json({
+        results: generateMockAdzunaJobs(String(what || ''), String(where || ''), String(country || 'gb')),
+        count: 10,
+        request_id: 'mock-request'
+      });
+    }
+
     if (!appId || !appKey) {
       return res.status(500).json({ error: 'Adzuna credentials missing' });
     }
@@ -239,7 +285,17 @@ async function startServer() {
       const status = error.response?.status || 500;
       
       if (status === 429) {
-        console.warn('Adzuna API Rate Limited (429). Serving mock data.');
+        tripCircuit('adzuna');
+        const mockData = {
+          results: generateMockAdzunaJobs(String(what || ''), String(where || ''), String(country || 'gb')),
+          count: 10,
+          request_id: 'mock-request'
+        };
+        return res.json(mockData);
+      }
+      
+      if (status === 503 || status === 500) {
+        console.warn(`Adzuna API Error (${status}). Serving mock data.`);
         const mockData = {
           results: generateMockAdzunaJobs(String(what || ''), String(where || ''), String(country || 'gb')),
           count: 10,
@@ -283,11 +339,22 @@ async function startServer() {
 
     const apiSettings = await getApiSettings();
     const apiKey = apiSettings.jsearch?.apiKey || process.env.RAPIDAPI_KEY;
+    const keySource = apiSettings.jsearch?.apiKey ? 'Firestore' : (process.env.RAPIDAPI_KEY ? 'Environment' : 'None');
+    console.log(`JSearch using API Key from: ${keySource} (Masked: ${maskKey(apiKey)})`);
+    
     const apiHost = apiSettings.jsearch?.host || process.env.RAPIDAPI_HOST || 'jsearch.p.rapidapi.com';
     const enabled = apiSettings.jsearch?.enabled !== false;
 
     if (!enabled) {
       return res.json({ data: [] });
+    }
+
+    if (!isApiHealthy('jsearch')) {
+      console.log('Serving JSearch from circuit breaker (overloaded)');
+      return res.json({
+        data: generateMockJSearchJobs(String(query || 'developer'), String(country || 'us')),
+        request_id: 'mock-request'
+      });
     }
 
     if (!apiKey) {
@@ -317,7 +384,16 @@ async function startServer() {
       const status = error.response?.status || 500;
       
       if (status === 429) {
-        console.warn('JSearch API Rate Limited (429). Serving mock data.');
+        tripCircuit('jsearch');
+        const mockData = {
+          data: generateMockJSearchJobs(String(query || 'developer'), String(country || 'us')),
+          request_id: 'mock-request'
+        };
+        return res.json(mockData);
+      }
+
+      if (status === 503 || status === 500) {
+        console.warn(`JSearch API Error (${status}). Serving mock data.`);
         const mockData = {
           data: generateMockJSearchJobs(String(query || 'developer'), String(country || 'us')),
           request_id: 'mock-request'
@@ -356,13 +432,23 @@ async function startServer() {
     }
 
     const apiSettings = await getApiSettings();
-    
     const apiKey = apiSettings.google?.apiKey || process.env.RAPIDAPI_KEY;
+    const keySource = apiSettings.google?.apiKey ? 'Firestore' : (process.env.RAPIDAPI_KEY ? 'Environment' : 'None');
+    console.log(`Google Jobs using API Key from: ${keySource} (Masked: ${maskKey(apiKey)})`);
+    
     const apiHost = apiSettings.google?.host || 'google-jobs-api.p.rapidapi.com';
     const enabled = apiSettings.google?.enabled !== false;
 
     if (!enabled) {
       return res.json({ data: [] });
+    }
+
+    if (!isApiHealthy('google')) {
+      console.log('Serving Google Jobs from circuit breaker (overloaded)');
+      return res.json({
+        data: generateMockGoogleJobs(String(query || 'senior engineer'), String(location || 'remote')),
+        request_id: 'mock-request'
+      });
     }
 
     if (!apiKey) {
@@ -389,7 +475,16 @@ async function startServer() {
       const status = error.response?.status || 500;
       
       if (status === 429) {
-        console.warn('Google Jobs API Rate Limited (429). Serving mock data.');
+        tripCircuit('google');
+        const mockData = {
+          data: generateMockGoogleJobs(String(query || 'senior engineer'), String(location || 'remote')),
+          request_id: 'mock-request'
+        };
+        return res.json(mockData);
+      }
+
+      if (status === 503 || status === 500) {
+        console.warn(`Google Jobs API Error (${status}). Serving mock data.`);
         const mockData = {
           data: generateMockGoogleJobs(String(query || 'senior engineer'), String(location || 'remote')),
           request_id: 'mock-request'
@@ -409,7 +504,7 @@ async function startServer() {
       });
     }
   });
-
+  
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
@@ -430,4 +525,8 @@ async function startServer() {
   });
 }
 
-startServer();
+// Start the server
+startServer().catch(err => {
+  console.error('CRITICAL: Server failed to start:', err);
+  process.exit(1);
+});

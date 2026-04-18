@@ -9,7 +9,12 @@
         "email": { "type": "string", "format": "email" },
         "displayName": { "type": "string" },
         "photoURL": { "type": "string" },
-        "role": { "type": "string", "enum": ["user", "admin"] },
+        "location": { "type": "string" },
+        "bio": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "website": { "type": "string" },
+        "preferredKeywords": { "type": "array", "items": { "type": "string" } },
+        "role": { "type": "string", "enum": ["user", "admin", "moderator"] },
         "subscriptionStatus": { "type": "string", "enum": ["free", "pro", "premium"] },
         "subscriptionExpiresAt": { "type": "string", "format": "date-time" },
         "savedJobs": { "type": "array", "items": { "type": "string" } },
@@ -59,7 +64,6 @@
           "properties": {
             "facebook": { "type": "string" },
             "twitter": { "type": "string" },
-            "linkedin": { "type": "string" },
             "instagram": { "type": "string" }
           }
         },
