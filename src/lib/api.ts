@@ -131,6 +131,82 @@ export async function fetchGoogleJobs(params: {
   }
 }
 
+export async function fetchIndeedJobs(params: {
+  query: string;
+  location?: string;
+  page?: number;
+}): Promise<Job[]> {
+  try {
+    const response = await axios.get('/api/jobs/indeed', { params });
+    const results = Array.isArray(response.data) ? response.data : (response.data.results || response.data.data || []);
+    return results.map((item: any) => ({
+      id: `indeed-${item.id || Math.random().toString(36).substr(2, 9)}`,
+      title: item.job_title || item.title,
+      company: item.company_name || item.company,
+      location: item.location,
+      country: params.location || 'Global',
+      description: item.description,
+      applyUrl: item.url || item.apply_url,
+      createdAt: item.date_posted || new Date().toISOString(),
+      source: 'Indeed',
+      salary: item.salary || 'Not specified',
+    }));
+  } catch (error: any) {
+    console.error('Error fetching Indeed jobs:', error.message);
+    return [];
+  }
+}
+
+export async function fetchLinkedInJobs(params: {
+  query: string;
+  location?: string;
+  page?: number;
+}): Promise<Job[]> {
+  try {
+    const response = await axios.get('/api/jobs/linkedin', { params });
+    const results = Array.isArray(response.data) ? response.data : (response.data.data || response.data.results || []);
+    return results.map((item: any) => ({
+      id: `linkedin-${item.id || Math.random().toString(36).substr(2, 9)}`,
+      title: item.job_title || item.title,
+      company: item.company_name || item.company,
+      location: item.location,
+      country: params.location || 'Global',
+      description: item.description,
+      applyUrl: item.linkedin_url || item.url,
+      createdAt: item.posted_date || new Date().toISOString(),
+      source: 'LinkedIn',
+    }));
+  } catch (error: any) {
+    console.error('Error fetching LinkedIn jobs:', error.message);
+    return [];
+  }
+}
+
+export async function fetchZipRecruiterJobs(params: {
+  query: string;
+  location?: string;
+  page?: number;
+}): Promise<Job[]> {
+  try {
+    const response = await axios.get('/api/jobs/ziprecruiter', { params });
+    const results = response.data.jobs || [];
+    return results.map((item: any) => ({
+      id: `zip-${item.id || Math.random().toString(36).substr(2, 9)}`,
+      title: item.name || item.title,
+      company: item.hiring_company?.name || item.company,
+      location: item.location,
+      country: params.location || 'Global',
+      description: item.snippet || item.description,
+      applyUrl: item.url,
+      createdAt: item.posted_time_friendly || new Date().toISOString(),
+      source: 'ZipRecruiter',
+    }));
+  } catch (error: any) {
+    console.error('Error fetching ZipRecruiter jobs:', error.message);
+    return [];
+  }
+}
+
 export async function fetchAllJobs(params: {
   query: string;
   country?: string;
@@ -140,7 +216,7 @@ export async function fetchAllJobs(params: {
   jobType?: string;
   experienceLevel?: string;
 }): Promise<Job[]> {
-  const [adzuna, jsearch, google, manual] = await Promise.all([
+  const [adzuna, jsearch, google, indeed, linkedin, zip, manual] = await Promise.all([
     fetchAdzunaJobs({ country: params.country, what: params.query, page: params.page }),
     fetchJSearchJobs({ 
       query: params.query, 
@@ -149,10 +225,13 @@ export async function fetchAllJobs(params: {
       date_posted: 'all'
     }),
     fetchGoogleJobs({ query: params.query, location: params.country, page: params.page }),
+    fetchIndeedJobs({ query: params.query, location: params.country, page: params.page }),
+    fetchLinkedInJobs({ query: params.query, location: params.country, page: params.page }),
+    fetchZipRecruiterJobs({ query: params.query, location: params.country, page: params.page }),
     fetchManualJobs({ query: params.query, country: params.country })
   ]);
 
-  let results = [...manual, ...adzuna, ...jsearch, ...google];
+  let results = [...manual, ...adzuna, ...jsearch, ...google, ...indeed, ...linkedin, ...zip];
 
   // Client-side filtering for salary
   if (params.salaryMin !== undefined) {

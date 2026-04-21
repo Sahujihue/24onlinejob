@@ -154,7 +154,10 @@ export default function Admin() {
   const [apiConfig, setApiConfig] = useState<any>({
     adzuna: { enabled: true, appId: '', appKey: '' },
     jsearch: { enabled: true, apiKey: '', host: 'jsearch.p.rapidapi.com' },
-    google: { enabled: true, apiKey: '', host: 'google-jobs-api.p.rapidapi.com' }
+    google: { enabled: true, apiKey: '', host: 'google-jobs-api.p.rapidapi.com' },
+    indeed: { enabled: true, apiKey: '', host: 'indeed12.p.rapidapi.com' },
+    linkedin: { enabled: true, apiKey: '', host: 'linkedin-jobs-search.p.rapidapi.com' },
+    ziprecruiter: { enabled: true, apiKey: '', host: 'ziprecruiter-jobs.p.rapidapi.com' }
   });
   const [isResettingPages, setIsResettingPages] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -287,15 +290,18 @@ export default function Admin() {
       if (api === 'adzuna') endpoint = '/api/jobs/adzuna?country=gb&what=developer';
       if (api === 'jsearch') endpoint = '/api/jobs/jsearch?query=developer%20jobs%20in%20chicago&page=1&country=us&date_posted=all';
       if (api === 'google') endpoint = '/api/jobs/google?query=senior engineer';
+      if (api === 'indeed') endpoint = '/api/jobs/indeed?query=web developer&location=remote';
+      if (api === 'linkedin') endpoint = '/api/jobs/linkedin?query=software engineer&location=global';
+      if (api === 'ziprecruiter') endpoint = '/api/jobs/ziprecruiter?query=manager&location=new york';
 
       const response = await fetch(endpoint);
       const data = await response.json();
       
       if (response.ok) {
-        const isMock = (api === 'jsearch' || api === 'google' || api === 'adzuna') && data.request_id === 'mock-request';
+        const isMock = (api === 'jsearch' || api === 'google' || api === 'adzuna' || api === 'indeed' || api === 'linkedin' || api === 'ziprecruiter') && data.request_id === 'mock-request';
         setTestResult({ 
           success: true, 
-          count: data.results?.length || data.data?.length || data.hits?.length || 0,
+          count: data.results?.length || data.data?.length || data.hits?.length || data.jobs?.length || 0,
           isMock
         });
       } else {
@@ -1383,6 +1389,75 @@ export default function Admin() {
                     {testingApi === 'google' ? <Loader2 size={14} className="animate-spin" /> : 'Test Connection'}
                   </button>
                 </div>
+
+                {/* Indeed */}
+                <div className="p-6 rounded-2xl border bg-background space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold">Indeed (RapidAPI)</h3>
+                    <div className={`w-3 h-3 rounded-full ${apiStatus?.indeed?.configured ? 'bg-emerald-500' : 'bg-destructive'}`}></div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Key</p>
+                    <p className="text-xs font-mono opacity-60">{apiStatus?.indeed?.maskedKey || 'None'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Host</p>
+                    <p className="text-xs font-medium truncate" title={apiStatus?.indeed?.host}>{apiStatus?.indeed?.host || 'N/A'}</p>
+                  </div>
+                  <button 
+                    onClick={() => testApi('indeed')}
+                    disabled={!!testingApi}
+                    className="w-full py-2 bg-primary/10 text-primary rounded-lg text-xs font-bold hover:bg-primary/20 transition-all flex items-center justify-center gap-2"
+                  >
+                    {testingApi === 'indeed' ? <Loader2 size={14} className="animate-spin" /> : 'Test Connection'}
+                  </button>
+                </div>
+
+                {/* LinkedIn */}
+                <div className="p-6 rounded-2xl border bg-background space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold">LinkedIn Jobs</h3>
+                    <div className={`w-3 h-3 rounded-full ${apiStatus?.linkedin?.configured ? 'bg-emerald-500' : 'bg-destructive'}`}></div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Key</p>
+                    <p className="text-xs font-mono opacity-60">{apiStatus?.linkedin?.maskedKey || 'None'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Host</p>
+                    <p className="text-xs font-medium truncate" title={apiStatus?.linkedin?.host}>{apiStatus?.linkedin?.host || 'N/A'}</p>
+                  </div>
+                  <button 
+                    onClick={() => testApi('linkedin')}
+                    disabled={!!testingApi}
+                    className="w-full py-2 bg-primary/10 text-primary rounded-lg text-xs font-bold hover:bg-primary/20 transition-all flex items-center justify-center gap-2"
+                  >
+                    {testingApi === 'linkedin' ? <Loader2 size={14} className="animate-spin" /> : 'Test Connection'}
+                  </button>
+                </div>
+
+                {/* ZipRecruiter */}
+                <div className="p-6 rounded-2xl border bg-background space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold">ZipRecruiter</h3>
+                    <div className={`w-3 h-3 rounded-full ${apiStatus?.ziprecruiter?.configured ? 'bg-emerald-500' : 'bg-destructive'}`}></div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Key</p>
+                    <p className="text-xs font-mono opacity-60">{apiStatus?.ziprecruiter?.maskedKey || 'None'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Host</p>
+                    <p className="text-xs font-medium truncate" title={apiStatus?.ziprecruiter?.host}>{apiStatus?.ziprecruiter?.host || 'N/A'}</p>
+                  </div>
+                  <button 
+                    onClick={() => testApi('ziprecruiter')}
+                    disabled={!!testingApi}
+                    className="w-full py-2 bg-primary/10 text-primary rounded-lg text-xs font-bold hover:bg-primary/20 transition-all flex items-center justify-center gap-2"
+                  >
+                    {testingApi === 'ziprecruiter' ? <Loader2 size={14} className="animate-spin" /> : 'Test Connection'}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1406,12 +1481,12 @@ export default function Admin() {
                       <div className="space-y-2">
                         <p className="text-sm text-emerald-600">Successfully retrieved {testResult.count} jobs from the API.</p>
                         {testResult.isMock && (
-                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-1">
-                            <p className="text-xs font-bold text-amber-700 flex items-center gap-2">
+                          <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg space-y-1">
+                            <p className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-2">
                               <AlertCircle size={14} />
                               Fallback Mode Active
                             </p>
-                            <p className="text-[10px] text-amber-600 leading-tight">
+                            <p className="text-[10px] text-amber-600 dark:text-amber-300 leading-tight">
                               The API returned a <strong>429 Rate Limit</strong> error. We are currently showing <strong>Mock Data</strong> so you can continue testing the UI. Please upgrade your RapidAPI plan or wait for your quota to reset.
                             </p>
                           </div>
@@ -1421,7 +1496,7 @@ export default function Admin() {
                       <div className="space-y-3">
                         <p className="text-sm text-destructive/80 font-bold">{testResult.error}</p>
                         {testResult.details && (
-                          <div className="text-xs text-destructive/60 leading-relaxed bg-white/50 p-3 rounded-lg border border-destructive/10 font-mono break-all overflow-auto max-h-40">
+                          <div className="text-xs text-destructive/60 leading-relaxed bg-muted/30 p-3 rounded-lg border border-destructive/10 font-mono break-all overflow-auto max-h-40">
                             {typeof testResult.details === 'object' ? JSON.stringify(testResult.details, null, 2) : testResult.details}
                           </div>
                         )}
@@ -1584,6 +1659,105 @@ export default function Admin() {
                         className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
                         value={apiConfig.google.host}
                         onChange={e => setApiConfig({...apiConfig, google: {...apiConfig.google, host: e.target.value}})}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Indeed Config */}
+                <div className="p-6 rounded-2xl border bg-background space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold">Indeed Settings</h4>
+                    <button
+                      onClick={() => setApiConfig({...apiConfig, indeed: {...apiConfig.indeed, enabled: !apiConfig.indeed.enabled}})}
+                      className={`w-12 h-6 rounded-full transition-all relative border ${apiConfig.indeed.enabled ? 'bg-primary border-primary' : 'bg-muted-foreground/40 border-border'}`}
+                    >
+                      <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-background shadow-sm border border-border transition-all ${apiConfig.indeed.enabled ? 'right-0.5' : 'left-0.5'}`}></div>
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">RapidAPI Key</label>
+                      <input 
+                        type="password"
+                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
+                        value={apiConfig.indeed.apiKey}
+                        onChange={e => setApiConfig({...apiConfig, indeed: {...apiConfig.indeed, apiKey: e.target.value}})}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">API Host</label>
+                      <input 
+                        type="text"
+                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
+                        value={apiConfig.indeed.host || 'indeed12.p.rapidapi.com'}
+                        onChange={e => setApiConfig({...apiConfig, indeed: {...apiConfig.indeed, host: e.target.value}})}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* LinkedIn Config */}
+                <div className="p-6 rounded-2xl border bg-background space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold">LinkedIn Settings</h4>
+                    <button
+                      onClick={() => setApiConfig({...apiConfig, linkedin: {...apiConfig.linkedin, enabled: !apiConfig.linkedin.enabled}})}
+                      className={`w-12 h-6 rounded-full transition-all relative border ${apiConfig.linkedin.enabled ? 'bg-primary border-primary' : 'bg-muted-foreground/40 border-border'}`}
+                    >
+                      <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-background shadow-sm border border-border transition-all ${apiConfig.linkedin.enabled ? 'right-0.5' : 'left-0.5'}`}></div>
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">RapidAPI Key</label>
+                      <input 
+                        type="password"
+                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
+                        value={apiConfig.linkedin.apiKey}
+                        onChange={e => setApiConfig({...apiConfig, linkedin: {...apiConfig.linkedin, apiKey: e.target.value}})}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">API Host</label>
+                      <input 
+                        type="text"
+                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
+                        value={apiConfig.linkedin.host || 'linkedin-jobs-search.p.rapidapi.com'}
+                        onChange={e => setApiConfig({...apiConfig, linkedin: {...apiConfig.linkedin, host: e.target.value}})}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ZipRecruiter Config */}
+                <div className="p-6 rounded-2xl border bg-background space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold">ZipRecruiter Settings</h4>
+                    <button
+                      onClick={() => setApiConfig({...apiConfig, ziprecruiter: {...apiConfig.ziprecruiter, enabled: !apiConfig.ziprecruiter.enabled}})}
+                      className={`w-12 h-6 rounded-full transition-all relative border ${apiConfig.ziprecruiter.enabled ? 'bg-primary border-primary' : 'bg-muted-foreground/40 border-border'}`}
+                    >
+                      <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-background shadow-sm border border-border transition-all ${apiConfig.ziprecruiter.enabled ? 'right-0.5' : 'left-0.5'}`}></div>
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">RapidAPI Key</label>
+                      <input 
+                        type="password"
+                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
+                        value={apiConfig.ziprecruiter.apiKey}
+                        onChange={e => setApiConfig({...apiConfig, ziprecruiter: {...apiConfig.ziprecruiter, apiKey: e.target.value}})}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">API Host</label>
+                      <input 
+                        type="text"
+                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
+                        value={apiConfig.ziprecruiter.host || 'ziprecruiter-jobs.p.rapidapi.com'}
+                        onChange={e => setApiConfig({...apiConfig, ziprecruiter: {...apiConfig.ziprecruiter, host: e.target.value}})}
                       />
                     </div>
                   </div>
@@ -2498,7 +2672,7 @@ export default function Admin() {
                     </div>
                     <div className="p-4 rounded-xl bg-muted/30 border">
                       <p className="font-bold text-sm">API Integration</p>
-                      <p className="text-xs text-muted-foreground mt-1">Test and configure external job board APIs (Adzuna, JSearch) in the <strong>API</strong> tab.</p>
+                      <p className="text-xs text-muted-foreground mt-1">Test and configure external job board APIs (Adzuna, JSearch, Indeed, LinkedIn) in the <strong>API</strong> tab.</p>
                     </div>
                   </div>
                 </div>

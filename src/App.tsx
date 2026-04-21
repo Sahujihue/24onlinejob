@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { HelmetProvider } from 'react-helmet-async';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import ScrollToTop from './components/ScrollToTop';
 import AdSlot from './components/AdSlot';
 import Home from './pages/Home';
 import Jobs from './pages/Jobs';
@@ -106,11 +107,12 @@ export default function App() {
   return (
     <HelmetProvider>
       <Router>
+        <ScrollToTop />
         <SEO />
         <div className="flex min-h-screen flex-col bg-background text-foreground">
           <Navbar />
           <AdSlot slot="header" className="container mx-auto px-4" />
-          <main className="flex-1">
+          <main className="flex-1 min-h-[60vh]">
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/jobs" element={<Jobs />} />

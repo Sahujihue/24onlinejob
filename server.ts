@@ -11,14 +11,21 @@ import fs from 'fs';
 import Stripe from 'stripe';
 
 // Load Firebase Config
-const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
-const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
-
-// Initialize Firebase Client SDK (preferred in AI Studio server context for provisioned projects)
-console.log('Initializing Firebase Client SDK for server...');
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-console.log(`Firebase initialized using project: ${firebaseConfig.projectId}, database: ${firebaseConfig.firestoreDatabaseId || '(default)'}`);
+let db: any = null;
+try {
+  const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(firebaseConfigPath)) {
+    const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf8'));
+    console.log('Initializing Firebase Client SDK for server...');
+    const app = initializeApp(firebaseConfig);
+    db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+    console.log(`Firebase initialized using project: ${firebaseConfig.projectId}, database: ${firebaseConfig.firestoreDatabaseId || '(default)'}`);
+  } else {
+    console.warn('firebase-applet-config.json not found. API settings will fall back to environment variables.');
+  }
+} catch (error) {
+  console.error('Error initializing Firebase:', error);
+}
 
 // Helper to mask sensitive keys in logs
 function maskKey(key: string | undefined): string {
@@ -128,33 +135,68 @@ function generateMockAdzunaJobs(what: string, where: string, country: string) {
   }));
 }
 
+function generateMockIndeedJobs(query: string, location: string) {
+  const companies = ['Indeed Partner A', 'Indeed Partner B', 'Staffing Force', 'Job Hunter', 'Recruit Pro'];
+  const qStr = query.charAt(0).toUpperCase() + query.slice(1);
+  
+  return Array.from({ length: 15 }).map((_, i) => ({
+    id: `mock-indeed-${i}-${Date.now()}`,
+    job_title: `${qStr} Developer`,
+    company_name: companies[i % companies.length],
+    location: location || 'Remote',
+    description: `Full job description for ${qStr} position found via Indeed. (Mocked for stability).`,
+    url: 'https://24onlinejob.com/jobs',
+    date_posted: new Date(Date.now() - (i * 172800000)).toISOString(), // up to 30 days ago
+    salary: '$70k - $120k',
+    company_logo_url: `https://picsum.photos/seed/indeed-${i}/100/100`
+  }));
+}
+
+function generateMockLinkedInJobs(query: string, location: string) {
+  const companies = ['LinkedIn Cloud', 'Network Solutions', 'Social Tech', 'Professional Group'];
+  const qStr = query.charAt(0).toUpperCase() + query.slice(1);
+  
+  return Array.from({ length: 15 }).map((_, i) => ({
+    id: `mock-linkedin-${i}-${Date.now()}`,
+    job_title: `Senior ${qStr} Specialist`,
+    company_name: companies[i % companies.length],
+    location: location || 'Remote, Global',
+    description: `Experience a great culture as a ${qStr} at ${companies[i % companies.length]}. Apply via LinkedIn.`,
+    linkedin_url: 'https://24onlinejob.com/jobs',
+    posted_date: '3 days ago',
+    company_logo: `https://picsum.photos/seed/linkedin-${i}/100/100`
+  }));
+}
+
 async function getApiSettings() {
+  if (!db) return {};
   try {
     const settingsDoc = await getDoc(doc(db, 'settings', 'api'));
     if (settingsDoc.exists()) {
       return settingsDoc.data() || {};
     }
   } catch (error) {
-    console.error('Error fetching API settings from Firestore:', error);
+    console.warn('Could not fetch API settings from Firestore, using environment variables.');
   }
   return {};
 }
 
 async function getGlobalSettings() {
+  if (!db) return {};
   try {
     const settingsDoc = await getDoc(doc(db, 'settings', 'global'));
     if (settingsDoc.exists()) {
       return settingsDoc.data() || {};
     }
   } catch (error) {
-    console.error('Error fetching global settings from Firestore:', error);
+    console.warn('Could not fetch global settings from Firestore.');
   }
   return {};
 }
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(express.json());
 
@@ -234,7 +276,10 @@ async function startServer() {
         enabled: apiSettings.adzuna?.enabled !== false
       },
       jsearch: getStatus('jsearch', 'jsearch.p.rapidapi.com'),
-      google: getStatus('google', 'google-jobs-api.p.rapidapi.com')
+      google: getStatus('google', 'google-jobs-api.p.rapidapi.com'),
+      indeed: getStatus('indeed', 'indeed12.p.rapidapi.com'),
+      linkedin: getStatus('linkedin', 'linkedin-jobs-search.p.rapidapi.com'),
+      ziprecruiter: getStatus('ziprecruiter', 'ziprecruiter-jobs.p.rapidapi.com')
     };
     res.json(status);
   });
@@ -504,7 +549,99 @@ async function startServer() {
       });
     }
   });
-  
+
+  // API Proxy for Indeed (via RapidAPI Indeed12)
+  app.get('/api/jobs/indeed', async (req, res) => {
+    const { query, location, page = 1 } = req.query;
+    const apiSettings = await getApiSettings();
+    const apiKey = apiSettings.indeed?.apiKey || process.env.RAPIDAPI_KEY;
+    const apiHost = apiSettings.indeed?.host || 'indeed12.p.rapidapi.com';
+    const enabled = apiSettings.indeed?.enabled !== false;
+
+    if (!enabled) return res.json({ data: [] });
+    if (!isApiHealthy('indeed')) {
+      return res.json({
+        data: generateMockIndeedJobs(String(query || ''), String(location || '')),
+        request_id: 'mock-request'
+      });
+    }
+
+    if (!apiKey) return res.status(500).json({ error: 'RapidAPI key missing' });
+
+    try {
+      const response = await axios.get(`https://${apiHost}/jobs/search`, {
+        params: { query, location, page_id: page },
+        headers: { 'x-rapidapi-key': apiKey, 'x-rapidapi-host': apiHost }
+      });
+      res.json(response.data);
+    } catch (error: any) {
+      if (error.response?.status === 429) tripCircuit('indeed');
+      res.json({
+        data: generateMockIndeedJobs(String(query || ''), String(location || '')),
+        request_id: 'mock-request'
+      });
+    }
+  });
+
+  // API Proxy for LinkedIn (via RapidAPI LinkedIn Jobs Search)
+  app.get('/api/jobs/linkedin', async (req, res) => {
+    const { query, location, page = 1 } = req.query;
+    const apiSettings = await getApiSettings();
+    const apiKey = apiSettings.linkedin?.apiKey || process.env.RAPIDAPI_KEY;
+    const apiHost = apiSettings.linkedin?.host || 'linkedin-jobs-search.p.rapidapi.com';
+    const enabled = apiSettings.linkedin?.enabled !== false;
+
+    if (!enabled) return res.json({ data: [] });
+    if (!isApiHealthy('linkedin')) {
+      return res.json({
+        data: generateMockLinkedInJobs(String(query || ''), String(location || '')),
+        request_id: 'mock-request'
+      });
+    }
+
+    if (!apiKey) return res.status(500).json({ error: 'RapidAPI key missing' });
+
+    try {
+      const response = await axios.get(`https://${apiHost}/search`, {
+        params: { search_terms: query, location, page },
+        headers: { 'x-rapidapi-key': apiKey, 'x-rapidapi-host': apiHost }
+      });
+      res.json(response.data);
+    } catch (error: any) {
+      if (error.response?.status === 429) tripCircuit('linkedin');
+      res.json({
+        data: generateMockLinkedInJobs(String(query || ''), String(location || '')),
+        request_id: 'mock-request'
+      });
+    }
+  });
+
+  // API Proxy for ZipRecruiter (via RapidAPI)
+  app.get('/api/jobs/ziprecruiter', async (req, res) => {
+    const { query, location, page = 1 } = req.query;
+    const apiSettings = await getApiSettings();
+    const apiKey = apiSettings.ziprecruiter?.apiKey || process.env.RAPIDAPI_KEY;
+    const apiHost = apiSettings.ziprecruiter?.host || 'ziprecruiter-jobs.p.rapidapi.com';
+    const enabled = apiSettings.ziprecruiter?.enabled !== false;
+
+    if (!enabled) return res.json({ jobs: [] });
+    
+    if (!apiKey) return res.status(500).json({ error: 'RapidAPI key missing' });
+
+    try {
+      const response = await axios.get(`https://${apiHost}/jobs`, {
+        params: { search: query, location, page },
+        headers: { 'x-rapidapi-key': apiKey, 'x-rapidapi-host': apiHost }
+      });
+      res.json(response.data);
+    } catch (error: any) {
+      res.json({
+        jobs: [],
+        request_id: 'error-request'
+      });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
