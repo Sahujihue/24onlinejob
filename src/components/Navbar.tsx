@@ -1,5 +1,5 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { Sun, Moon, Search, User, LogOut, Menu, X, Briefcase } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Sun, Moon, Search, User, LogOut, Menu, X, Briefcase, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '../hooks/useTheme';
@@ -14,6 +14,7 @@ export default function Navbar() {
   const { settings } = useSettings();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -22,15 +23,16 @@ export default function Navbar() {
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      {user && !user.emailVerified && (
-        <div className="bg-amber-500 text-white py-2.5 px-4 text-center font-bold flex items-center justify-center gap-3 shadow-lg relative z-[60]">
+      {user && !user.emailVerified && location.pathname !== '/verify-email' && (
+        <div className="bg-amber-500 text-white py-2.5 px-4 text-center font-semibold flex items-center justify-center gap-3 shadow-lg relative z-[60]">
           <div className="flex items-center gap-2">
+            <AlertCircle size={18} className="animate-pulse" />
             <span className="hidden sm:inline">Your email is not verified. Please check your inbox for the verification link.</span>
-            <span className="sm:hidden">Email not verified. Check inbox.</span>
+            <span className="sm:hidden text-xs">Email not verified. Check inbox.</span>
           </div>
           <Link 
             to="/verify-email" 
-            className="bg-white text-amber-600 px-4 py-1 rounded-full text-[10px] sm:text-xs uppercase tracking-wider hover:bg-amber-50 transition-colors shadow-sm"
+            className="bg-white text-amber-600 px-4 py-1 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wider hover:bg-amber-50 transition-all shadow-sm hover:scale-105 active:scale-95"
           >
             Verify Now
           </Link>

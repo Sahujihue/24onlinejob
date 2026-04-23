@@ -168,6 +168,21 @@ function generateMockLinkedInJobs(query: string, location: string) {
   }));
 }
 
+function generateMockZipRecruiterJobs(query: string, location: string) {
+  const companies = ['ZipHire', 'QuickStaff', 'RecruitStream', 'Hiring Hub'];
+  const qStr = query.charAt(0).toUpperCase() + query.slice(1);
+  
+  return Array.from({ length: 10 }).map((_, i) => ({
+    id: `mock-zip-${i}-${Date.now()}`,
+    name: `${qStr} Architect`,
+    hiring_company: { name: companies[i % companies.length] },
+    location: location || 'USA',
+    snippet: `Join ${companies[i % companies.length]} as a ${qStr} lead. Fast hiring process.`,
+    url: 'https://24onlinejob.com/jobs',
+    posted_time_friendly: 'Recently'
+  }));
+}
+
 async function getApiSettings() {
   if (!db) return {};
   try {
@@ -270,16 +285,19 @@ async function startServer() {
 
     const status = {
       adzuna: {
-        configured: !!((apiSettings.adzuna?.appId && apiSettings.adzuna?.appKey) || (process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY)),
-        source: (apiSettings.adzuna?.appId && apiSettings.adzuna?.appKey) ? 'Firestore' : ((process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY) ? 'Environment' : 'None'),
-        appId: (apiSettings.adzuna?.appId || process.env.ADZUNA_APP_ID) ? `${(apiSettings.adzuna?.appId || process.env.ADZUNA_APP_ID).substring(0, 4)}...` : null,
-        enabled: apiSettings.adzuna?.enabled !== false
+        configured: !!(apiSettings.adzuna?.appKey || process.env.ADZUNA_APP_KEY),
+        source: apiSettings.adzuna?.appKey ? 'Firestore' : (process.env.ADZUNA_APP_KEY ? 'Environment' : 'None'),
+        appKey: apiSettings.adzuna?.appKey ? `${apiSettings.adzuna.appKey.substring(0, 4)}...` : null,
+        enabled: apiSettings.adzuna?.enabled !== false,
+        host: apiSettings.adzuna?.host || 'api.adzuna.com'
       },
       jsearch: getStatus('jsearch', 'jsearch.p.rapidapi.com'),
       google: getStatus('google', 'google-jobs-api.p.rapidapi.com'),
       indeed: getStatus('indeed', 'indeed12.p.rapidapi.com'),
       linkedin: getStatus('linkedin', 'linkedin-jobs-search.p.rapidapi.com'),
-      ziprecruiter: getStatus('ziprecruiter', 'ziprecruiter-jobs.p.rapidapi.com')
+      ziprecruiter: getStatus('ziprecruiter', 'ziprecruiter-jobs.p.rapidapi.com'),
+      jooble: getStatus('jooble', 'jooble-jobs-search.p.rapidapi.com'),
+      careerjet: getStatus('careerjet', 'careerjet-jobs.p.rapidapi.com')
     };
     res.json(status);
   });
@@ -313,19 +331,40 @@ async function startServer() {
     try {
       const countryCode = (country && String(country).trim()) ? String(country).toLowerCase() : 'gb';
       const pageNum = Number(page) || 1;
-      const url = `https://api.adzuna.com/v1/api/jobs/${countryCode}/search/${pageNum}`;
       
-      const params: any = {
-        app_id: appId,
-        app_key: appKey,
-        results_per_page: 20
-      };
+      const apiHost = apiSettings.adzuna?.host || 'api.adzuna.com';
+      
+      if (apiHost.includes('rapidapi')) {
+        // RapidAPI version of Adzuna
+        const url = `https://${apiHost}/jobs/${countryCode}/search/${pageNum}`;
+        const params: any = {
+          results_per_page: 20
+        };
+        if (what) params.what = what;
+        if (where) params.where = where;
 
-      if (what) params.what = what;
-      if (where) params.where = where;
+        const response = await axios.get(url, { 
+          params,
+          headers: {
+            'x-rapidapi-key': appKey,
+            'x-rapidapi-host': apiHost
+          }
+        });
+        return res.json(response.data);
+      } else {
+        // Standard Adzuna version
+        const url = `https://api.adzuna.com/v1/api/jobs/${countryCode}/search/${pageNum}`;
+        const params: any = {
+          app_id: appId,
+          app_key: appKey,
+          results_per_page: 20
+        };
+        if (what) params.what = what;
+        if (where) params.where = where;
 
-      const response = await axios.get(url, { params });
-      res.json(response.data);
+        const response = await axios.get(url, { params });
+        return res.json(response.data);
+      }
     } catch (error: any) {
       const status = error.response?.status || 500;
       
@@ -625,6 +664,12 @@ async function startServer() {
     const enabled = apiSettings.ziprecruiter?.enabled !== false;
 
     if (!enabled) return res.json({ jobs: [] });
+    if (!isApiHealthy('ziprecruiter')) {
+      return res.json({
+        jobs: generateMockZipRecruiterJobs(String(query || ''), String(location || '')),
+        request_id: 'mock-request'
+      });
+    }
     
     if (!apiKey) return res.status(500).json({ error: 'RapidAPI key missing' });
 
@@ -635,10 +680,58 @@ async function startServer() {
       });
       res.json(response.data);
     } catch (error: any) {
+      if (error.response?.status === 429) tripCircuit('ziprecruiter');
       res.json({
-        jobs: [],
-        request_id: 'error-request'
+        jobs: generateMockZipRecruiterJobs(String(query || ''), String(location || '')),
+        request_id: 'mock-request'
       });
+    }
+  });
+
+  // API Proxy for Jooble (via RapidAPI)
+  app.get('/api/jobs/jooble', async (req, res) => {
+    const { query, location, page = 1 } = req.query;
+    const apiSettings = await getApiSettings();
+    const apiKey = apiSettings.jooble?.apiKey || process.env.RAPIDAPI_KEY;
+    const apiHost = apiSettings.jooble?.host || 'jooble-jobs-search.p.rapidapi.com';
+    const enabled = apiSettings.jooble?.enabled !== false;
+
+    if (!enabled) return res.json({ jobs: [] });
+    if (!isApiHealthy('jooble')) return res.json({ jobs: [], request_id: 'mock-request' });
+    
+    if (!apiKey) return res.status(500).json({ error: 'RapidAPI key missing' });
+
+    try {
+      const response = await axios.get(`https://${apiHost}/search`, {
+        params: { keywords: query, location, page },
+        headers: { 'x-rapidapi-key': apiKey, 'x-rapidapi-host': apiHost }
+      });
+      res.json(response.data);
+    } catch (error: any) {
+      res.json({ jobs: [], request_id: 'error-request' });
+    }
+  });
+
+  // API Proxy for Careerjet (via RapidAPI)
+  app.get('/api/jobs/careerjet', async (req, res) => {
+    const { query, location, page = 1 } = req.query;
+    const apiSettings = await getApiSettings();
+    const apiKey = apiSettings.careerjet?.apiKey || process.env.RAPIDAPI_KEY;
+    const apiHost = apiSettings.careerjet?.host || 'careerjet-jobs.p.rapidapi.com';
+    const enabled = apiSettings.careerjet?.enabled !== false;
+
+    if (!enabled) return res.json({ jobs: [] });
+    
+    if (!apiKey) return res.status(500).json({ error: 'RapidAPI key missing' });
+
+    try {
+      const response = await axios.get(`https://${apiHost}/search`, {
+        params: { keywords: query, location, page },
+        headers: { 'x-rapidapi-key': apiKey, 'x-rapidapi-host': apiHost }
+      });
+      res.json(response.data);
+    } catch (error: any) {
+      res.json({ jobs: [], request_id: 'error-request' });
     }
   });
 

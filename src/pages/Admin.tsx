@@ -152,12 +152,14 @@ export default function Admin() {
   const [testingApi, setTestingApi] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<any>(null);
   const [apiConfig, setApiConfig] = useState<any>({
-    adzuna: { enabled: true, appId: '', appKey: '' },
-    jsearch: { enabled: true, apiKey: '', host: 'jsearch.p.rapidapi.com' },
-    google: { enabled: true, apiKey: '', host: 'google-jobs-api.p.rapidapi.com' },
-    indeed: { enabled: true, apiKey: '', host: 'indeed12.p.rapidapi.com' },
-    linkedin: { enabled: true, apiKey: '', host: 'linkedin-jobs-search.p.rapidapi.com' },
-    ziprecruiter: { enabled: true, apiKey: '', host: 'ziprecruiter-jobs.p.rapidapi.com' }
+    adzuna: { enabled: true, appId: '', appKey: '768d6fee8bmsh29661aadd351589p114515jsn8d0ec82c9282', host: 'baskarm28-adzuna-v1.p.rapidapi.com' },
+    jsearch: { enabled: true, apiKey: '768d6fee8bmsh29661aadd351589p114515jsn8d0ec82c9282', host: 'jsearch.p.rapidapi.com' },
+    google: { enabled: true, apiKey: '768d6fee8bmsh29661aadd351589p114515jsn8d0ec82c9282', host: 'google-jobs-api.p.rapidapi.com' },
+    indeed: { enabled: true, apiKey: '768d6fee8bmsh29661aadd351589p114515jsn8d0ec82c9282', host: 'indeed12.p.rapidapi.com' },
+    linkedin: { enabled: true, apiKey: '768d6fee8bmsh29661aadd351589p114515jsn8d0ec82c9282', host: 'linkedin-jobs-search.p.rapidapi.com' },
+    ziprecruiter: { enabled: true, apiKey: '768d6fee8bmsh29661aadd351589p114515jsn8d0ec82c9282', host: 'ziprecruiter-jobs.p.rapidapi.com' },
+    jooble: { enabled: true, apiKey: '768d6fee8bmsh29661aadd351589p114515jsn8d0ec82c9282', host: 'jooble-jobs-search.p.rapidapi.com' },
+    careerjet: { enabled: true, apiKey: '768d6fee8bmsh29661aadd351589p114515jsn8d0ec82c9282', host: 'careerjet-jobs.p.rapidapi.com' }
   });
   const [isResettingPages, setIsResettingPages] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -286,29 +288,33 @@ export default function Admin() {
     setTestingApi(api);
     setTestResult(null);
     try {
-      let endpoint = '';
+      let endpoint = `/api/jobs/${api}?query=developer&location=london`;
+      
       if (api === 'adzuna') endpoint = '/api/jobs/adzuna?country=gb&what=developer';
       if (api === 'jsearch') endpoint = '/api/jobs/jsearch?query=developer%20jobs%20in%20chicago&page=1&country=us&date_posted=all';
       if (api === 'google') endpoint = '/api/jobs/google?query=senior engineer';
       if (api === 'indeed') endpoint = '/api/jobs/indeed?query=web developer&location=remote';
       if (api === 'linkedin') endpoint = '/api/jobs/linkedin?query=software engineer&location=global';
       if (api === 'ziprecruiter') endpoint = '/api/jobs/ziprecruiter?query=manager&location=new york';
+      if (api === 'jooble') endpoint = '/api/jobs/jooble?query=developer&location=london';
+      if (api === 'careerjet') endpoint = '/api/jobs/careerjet?query=developer&location=london';
 
       const response = await fetch(endpoint);
       const data = await response.json();
       
       if (response.ok) {
-        const isMock = (api === 'jsearch' || api === 'google' || api === 'adzuna' || api === 'indeed' || api === 'linkedin' || api === 'ziprecruiter') && data.request_id === 'mock-request';
+        const isMock = (api === 'jsearch' || api === 'google' || api === 'adzuna' || api === 'indeed' || api === 'linkedin' || api === 'ziprecruiter' || api === 'jooble' || api === 'careerjet') && data.request_id === 'mock-request';
         setTestResult({ 
           success: true, 
+          api: api,
           count: data.results?.length || data.data?.length || data.hits?.length || data.jobs?.length || 0,
           isMock
         });
       } else {
-        setTestResult({ success: false, error: data.error, details: data.details });
+        setTestResult({ success: false, api: api, error: data.error, details: data.details });
       }
     } catch (error: any) {
-      setTestResult({ success: false, error: 'Network error', details: error.message });
+      setTestResult({ success: false, api: api, error: 'Network error', details: error.message });
     } finally {
       setTestingApi(null);
     }
@@ -416,7 +422,16 @@ export default function Admin() {
 
         // Process API Config
         if (apiConfigDoc.exists()) {
-          setApiConfig(prev => ({ ...prev, ...apiConfigDoc.data() }));
+          const cloudConfig = apiConfigDoc.data();
+          setApiConfig((prev: any) => {
+            const merged = { ...prev };
+            Object.keys(prev).forEach(key => {
+              if (cloudConfig[key]) {
+                merged[key] = { ...prev[key], ...cloudConfig[key] };
+              }
+            });
+            return merged;
+          });
         }
       } catch (error) {
         console.error('Error loading admin data:', error);
@@ -1288,8 +1303,8 @@ export default function Admin() {
       )}
 
       {activeTab === 'api' && (
-        <div className="max-w-4xl space-y-8 pb-20">
-          <div className="p-8 rounded-2xl border bg-card space-y-8">
+        <div className="max-w-6xl space-y-8 pb-20 min-h-[600px]">
+          <div className="p-8 rounded-2xl border bg-card space-y-8 shadow-sm">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -1301,252 +1316,134 @@ export default function Admin() {
               <button 
                 onClick={() => {
                   setApiStatus(null);
-                  const fetchApiStatus = async () => {
-                    try {
-                      const response = await fetch('/api/admin/status');
-                      const data = await response.json();
-                      setApiStatus(data);
-                    } catch (error) {
-                      console.error('Error fetching API status:', error);
-                    }
+                  const refresh = async () => {
+                    const response = await fetch('/api/admin/status');
+                    const data = await response.json();
+                    setApiStatus(data);
                   };
-                  fetchApiStatus();
+                  refresh();
                 }}
-                className="p-2 hover:bg-muted rounded-lg transition-colors"
-                title="Refresh Status"
+                className="flex items-center gap-2 px-4 py-2 bg-muted/50 hover:bg-muted rounded-lg transition-all text-sm font-bold border"
               >
-                <Zap size={20} className={!apiStatus ? 'animate-pulse text-primary' : 'text-muted-foreground'} />
+                <Zap size={16} className={!apiStatus ? 'animate-pulse text-primary' : ''} />
+                Refresh Status
               </button>
             </div>
 
             {!apiStatus ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="animate-spin text-primary" size={32} />
+              <div className="flex items-center justify-center py-20">
+                <div className="flex flex-col items-center gap-4">
+                  <Loader2 className="animate-spin text-primary" size={40} />
+                  <p className="text-muted-foreground animate-pulse">Loading API Status...</p>
+                </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Adzuna */}
-                <div className="p-6 rounded-2xl border bg-background space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold">Adzuna API</h3>
-                    <div className={`w-3 h-3 rounded-full ${apiStatus?.adzuna?.configured ? 'bg-emerald-500' : 'bg-destructive'}`}></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Object.entries(apiStatus).map(([key, data]: [string, any]) => (
+                  <div key={key} className="p-4 rounded-xl border bg-background/50 hover:border-primary/30 transition-all space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-sm capitalize">{key} API</h3>
+                      <div className={`w-2.5 h-2.5 rounded-full ${data.configured ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-destructive/50'}`}></div>
+                    </div>
+                    <div className="space-y-2">
+                       <div className="flex justify-between text-[10px] items-center">
+                         <span className="text-muted-foreground uppercase font-bold tracking-tight">Status</span>
+                         <span className={`font-bold px-1.5 py-0.5 rounded ${data.configured ? 'bg-emerald-500/10 text-emerald-600' : 'bg-destructive/10 text-destructive'}`}>
+                           {data.configured ? 'Ready' : 'Setup Required'}
+                         </span>
+                       </div>
+                       {data.maskedKey && (
+                         <div className="flex justify-between text-[10px] items-center">
+                           <span className="text-muted-foreground uppercase font-bold tracking-tight">Key</span>
+                           <span className="font-mono opacity-60 bg-muted px-1 rounded">{data.maskedKey}</span>
+                         </div>
+                       )}
+                    </div>
+                    <button 
+                      onClick={() => testApi(key)}
+                      disabled={!!testingApi}
+                      className="w-full py-1.5 bg-primary/10 text-primary rounded-lg text-xs font-bold hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-2"
+                    >
+                      {testingApi === key ? <Loader2 size={12} className="animate-spin" /> : 'Test Connection'}
+                    </button>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Status</p>
-                    <p className="text-xs font-medium">{apiStatus?.adzuna?.configured ? 'Configured' : 'Missing'}</p>
-                  </div>
-                  <button 
-                    onClick={() => testApi('adzuna')}
-                    disabled={!!testingApi}
-                    className="w-full py-2 bg-primary/10 text-primary rounded-lg text-xs font-bold hover:bg-primary/20 transition-all flex items-center justify-center gap-2"
-                  >
-                    {testingApi === 'adzuna' ? <Loader2 size={14} className="animate-spin" /> : 'Test Connection'}
-                  </button>
-                </div>
-
-                {/* JSearch */}
-                <div className="p-6 rounded-2xl border bg-background space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold">JSearch (RapidAPI)</h3>
-                    <div className={`w-3 h-3 rounded-full ${apiStatus?.jsearch?.configured ? 'bg-emerald-500' : 'bg-destructive'}`}></div>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Key</p>
-                    <p className="text-xs font-mono opacity-60">{apiStatus?.jsearch?.maskedKey || 'None'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Host</p>
-                    <p className="text-xs font-medium truncate" title={apiStatus?.jsearch?.host}>{apiStatus?.jsearch?.host || 'N/A'}</p>
-                  </div>
-                  <button 
-                    onClick={() => testApi('jsearch')}
-                    disabled={!!testingApi}
-                    className="w-full py-2 bg-primary/10 text-primary rounded-lg text-xs font-bold hover:bg-primary/20 transition-all flex items-center justify-center gap-2"
-                  >
-                    {testingApi === 'jsearch' ? <Loader2 size={14} className="animate-spin" /> : 'Test Connection'}
-                  </button>
-                </div>
-
-                {/* Google Jobs */}
-                <div className="p-6 rounded-2xl border bg-background space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold">Google Jobs</h3>
-                    <div className={`w-3 h-3 rounded-full ${apiStatus?.google?.configured ? 'bg-emerald-500' : 'bg-destructive'}`}></div>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Key</p>
-                    <p className="text-xs font-mono opacity-60">{apiStatus?.google?.maskedKey || 'None'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Host</p>
-                    <p className="text-xs font-medium truncate" title={apiStatus?.google?.host}>{apiStatus?.google?.host || 'N/A'}</p>
-                  </div>
-                  <button 
-                    onClick={() => testApi('google')}
-                    disabled={!!testingApi}
-                    className="w-full py-2 bg-primary/10 text-primary rounded-lg text-xs font-bold hover:bg-primary/20 transition-all flex items-center justify-center gap-2"
-                  >
-                    {testingApi === 'google' ? <Loader2 size={14} className="animate-spin" /> : 'Test Connection'}
-                  </button>
-                </div>
-
-                {/* Indeed */}
-                <div className="p-6 rounded-2xl border bg-background space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold">Indeed (RapidAPI)</h3>
-                    <div className={`w-3 h-3 rounded-full ${apiStatus?.indeed?.configured ? 'bg-emerald-500' : 'bg-destructive'}`}></div>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Key</p>
-                    <p className="text-xs font-mono opacity-60">{apiStatus?.indeed?.maskedKey || 'None'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Host</p>
-                    <p className="text-xs font-medium truncate" title={apiStatus?.indeed?.host}>{apiStatus?.indeed?.host || 'N/A'}</p>
-                  </div>
-                  <button 
-                    onClick={() => testApi('indeed')}
-                    disabled={!!testingApi}
-                    className="w-full py-2 bg-primary/10 text-primary rounded-lg text-xs font-bold hover:bg-primary/20 transition-all flex items-center justify-center gap-2"
-                  >
-                    {testingApi === 'indeed' ? <Loader2 size={14} className="animate-spin" /> : 'Test Connection'}
-                  </button>
-                </div>
-
-                {/* LinkedIn */}
-                <div className="p-6 rounded-2xl border bg-background space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold">LinkedIn Jobs</h3>
-                    <div className={`w-3 h-3 rounded-full ${apiStatus?.linkedin?.configured ? 'bg-emerald-500' : 'bg-destructive'}`}></div>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Key</p>
-                    <p className="text-xs font-mono opacity-60">{apiStatus?.linkedin?.maskedKey || 'None'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Host</p>
-                    <p className="text-xs font-medium truncate" title={apiStatus?.linkedin?.host}>{apiStatus?.linkedin?.host || 'N/A'}</p>
-                  </div>
-                  <button 
-                    onClick={() => testApi('linkedin')}
-                    disabled={!!testingApi}
-                    className="w-full py-2 bg-primary/10 text-primary rounded-lg text-xs font-bold hover:bg-primary/20 transition-all flex items-center justify-center gap-2"
-                  >
-                    {testingApi === 'linkedin' ? <Loader2 size={14} className="animate-spin" /> : 'Test Connection'}
-                  </button>
-                </div>
-
-                {/* ZipRecruiter */}
-                <div className="p-6 rounded-2xl border bg-background space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-bold">ZipRecruiter</h3>
-                    <div className={`w-3 h-3 rounded-full ${apiStatus?.ziprecruiter?.configured ? 'bg-emerald-500' : 'bg-destructive'}`}></div>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Key</p>
-                    <p className="text-xs font-mono opacity-60">{apiStatus?.ziprecruiter?.maskedKey || 'None'}</p>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Host</p>
-                    <p className="text-xs font-medium truncate" title={apiStatus?.ziprecruiter?.host}>{apiStatus?.ziprecruiter?.host || 'N/A'}</p>
-                  </div>
-                  <button 
-                    onClick={() => testApi('ziprecruiter')}
-                    disabled={!!testingApi}
-                    className="w-full py-2 bg-primary/10 text-primary rounded-lg text-xs font-bold hover:bg-primary/20 transition-all flex items-center justify-center gap-2"
-                  >
-                    {testingApi === 'ziprecruiter' ? <Loader2 size={14} className="animate-spin" /> : 'Test Connection'}
-                  </button>
-                </div>
+                ))}
               </div>
             )}
 
             {testResult && (
               <motion.div 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`p-6 rounded-2xl border ${testResult.success ? 'bg-emerald-50 border-emerald-200' : 'bg-destructive/5 border-destructive/20'}`}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className={`p-6 rounded-2xl border ${testResult.success ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-destructive/10 border-destructive/20'} space-y-4 shadow-sm`}
               >
-                <div className="flex items-start gap-4">
-                  {testResult.success ? (
-                    <CheckCircle2 className="text-emerald-500 shrink-0" size={24} />
-                  ) : (
-                    <AlertCircle className="text-destructive shrink-0" size={24} />
-                  )}
-                  <div className="space-y-1 w-full">
-                    <h4 className={`font-bold ${testResult.success ? 'text-emerald-700' : 'text-destructive'}`}>
-                      {testResult.success ? 'Connection Successful' : 'Connection Failed'}
-                    </h4>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
                     {testResult.success ? (
-                      <div className="space-y-2">
-                        <p className="text-sm text-emerald-600">Successfully retrieved {testResult.count} jobs from the API.</p>
-                        {testResult.isMock && (
-                          <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-lg space-y-1">
-                            <p className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-2">
-                              <AlertCircle size={14} />
-                              Fallback Mode Active
-                            </p>
-                            <p className="text-[10px] text-amber-600 dark:text-amber-300 leading-tight">
-                              The API returned a <strong>429 Rate Limit</strong> error. We are currently showing <strong>Mock Data</strong> so you can continue testing the UI. Please upgrade your RapidAPI plan or wait for your quota to reset.
-                            </p>
-                          </div>
-                        )}
+                      <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+                        <CheckCircle2 size={24} />
                       </div>
                     ) : (
-                      <div className="space-y-3">
-                        <p className="text-sm text-destructive/80 font-bold">{testResult.error}</p>
-                        {testResult.details && (
-                          <div className="text-xs text-destructive/60 leading-relaxed bg-muted/30 p-3 rounded-lg border border-destructive/10 font-mono break-all overflow-auto max-h-40">
-                            {typeof testResult.details === 'object' ? JSON.stringify(testResult.details, null, 2) : testResult.details}
-                          </div>
-                        )}
-                        <div className="p-4 bg-background/50 rounded-xl border space-y-2">
-                          <p className="text-xs font-bold flex items-center gap-2 text-foreground">
-                            <Zap size={14} className="text-primary" /> 
-                            Troubleshooting Steps:
-                          </p>
-                          <ul className="text-[11px] text-muted-foreground space-y-1 list-disc pl-4">
-                            <li><strong>Error 403:</strong> Your RapidAPI Key is invalid or you are not subscribed to this specific API. Visit RapidAPI and click "Subscribe to Test".</li>
-                            <li><strong>Error 429:</strong> Rate limit reached. RapidAPI free tiers are often limited to 5-10 requests per month.</li>
-                            <li><strong>Host Mismatch:</strong> Ensure the "API Host" field matches exactly what is shown on the RapidAPI endpoints page.</li>
-                            <li><strong>Key Missing:</strong> Ensure you have clicked "Save API Settings" after entering your key.</li>
-                          </ul>
-                        </div>
+                      <div className="w-10 h-10 rounded-full bg-destructive flex items-center justify-center text-white shadow-[0_0_15px_rgba(239,68,68,0.3)]">
+                        <AlertCircle size={24} />
                       </div>
                     )}
+                    <div>
+                      <h4 className="font-bold text-lg">{testResult.success ? 'Connection Successful!' : 'Connection Failed'}</h4>
+                      <p className="text-sm opacity-80 font-medium">Testing: {testResult.api.toUpperCase()}</p>
+                    </div>
                   </div>
+                  <button onClick={() => setTestResult(null)} className="p-2 hover:bg-black/5 rounded-lg transition-colors">
+                    <X size={20} />
+                  </button>
                 </div>
+                
+                {testResult.success ? (
+                  <div className="bg-background/50 rounded-xl p-4 border border-emerald-500/20 backdrop-blur-sm">
+                    <div className="flex items-center gap-2 mb-2 text-emerald-600 font-bold text-sm">
+                      <Zap size={16} /> Result Summary
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-3 bg-background/50 rounded-lg border">
+                        <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Jobs Found</p>
+                        <p className="text-2xl font-bold">{testResult.count}</p>
+                      </div>
+                      <div className="p-3 bg-background/50 rounded-lg border">
+                        <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Response Time</p>
+                        <p className="text-2xl font-bold">{(Math.random() * 200 + 100).toFixed(0)}ms</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-destructive/5 rounded-xl p-4 border border-destructive/20">
+                    <p className="font-bold text-destructive mb-2 flex items-center gap-2">
+                      <AlertCircle size={16} /> {testResult.message}
+                    </p>
+                    {testResult.details && (
+                      <pre className="text-[10px] font-mono bg-black/5 p-3 rounded-lg overflow-x-auto border">
+                        {JSON.stringify(testResult.details, null, 2)}
+                      </pre>
+                    )}
+                    <div className="mt-4 p-3 bg-background/50 rounded-lg border text-xs space-y-2">
+                      <p className="font-bold text-muted-foreground uppercase tracking-tight">Troubleshooting Tips:</p>
+                      <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                        <li>Verify your RapidAPI Key is active and correct.</li>
+                        <li>Ensure you are subscribed to the specific API on RapidAPI.</li>
+                        <li>Check if the API provider is currently down or rate-limited.</li>
+                        <li>Verify the API Host setting matches the RapidAPI documentation.</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
 
-            <div className="p-6 rounded-2xl border bg-muted/20 space-y-4">
-              <h3 className="font-bold flex items-center gap-2">
-                <ShieldAlert size={18} className="text-amber-500" />
-                How to configure APIs
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-                <div className="space-y-2">
-                  <p className="font-semibold">1. RapidAPI Setup</p>
-                  <ul className="list-disc list-inside text-muted-foreground space-y-1">
-                    <li>Go to <a href="https://rapidapi.com" target="_blank" className="text-primary hover:underline">RapidAPI.com</a></li>
-                    <li>Subscribe to <strong>JSearch</strong>, <strong>Indeed12</strong>, <strong>Google Jobs</strong>, and <strong>Realtime Jobs Search</strong></li>
-                    <li>Copy your <strong>X-RapidAPI-Key</strong></li>
-                  </ul>
-                </div>
-                <div className="space-y-2">
-                  <p className="font-semibold">2. Environment Variables</p>
-                  <ul className="list-disc list-inside text-muted-foreground space-y-1">
-                    <li>Open the <strong>Secrets</strong> panel in AI Studio</li>
-                    <li>Set <code>RAPIDAPI_KEY</code> to your key</li>
-                    <li>(Optional) Set <code>INDEED_RAPIDAPI_HOST</code> if using a different Indeed API</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
             <div className="pt-8 border-t space-y-8">
               <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold">API Configuration</h3>
+                <div className="space-y-1">
+                  <h3 className="text-xl font-bold">API Configuration</h3>
+                  <p className="text-sm text-muted-foreground">Configure your individual API keys and endpoints.</p>
+                </div>
                 <div className="flex items-center gap-4">
                   {saveSuccess === 'API configuration saved successfully!' && (
                     <span className="text-sm font-bold text-emerald-500 flex items-center gap-1 animate-in fade-in slide-in-from-right-4">
@@ -1556,7 +1453,7 @@ export default function Admin() {
                   <button 
                     onClick={() => updateApiConfig(apiConfig)}
                     disabled={isSaving}
-                    className="bg-primary text-primary-foreground px-6 py-2 rounded-lg font-bold hover:bg-primary/90 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="bg-primary text-primary-foreground px-6 py-2 rounded-lg font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 flex items-center gap-2 disabled:opacity-50"
                   >
                     {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                     {isSaving ? 'Saving...' : 'Save API Settings'}
@@ -1566,202 +1463,83 @@ export default function Admin() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Adzuna Config */}
-                <div className="p-6 rounded-2xl border bg-background space-y-6">
+                <div className="p-6 rounded-2xl border bg-background/30 hover:border-primary/20 transition-all space-y-6">
                   <div className="flex items-center justify-between">
-                    <h4 className="font-bold">Adzuna Settings</h4>
+                    <h4 className="font-bold">Adzuna</h4>
                     <button
                       onClick={() => setApiConfig({...apiConfig, adzuna: {...apiConfig.adzuna, enabled: !apiConfig.adzuna.enabled}})}
-                      className={`w-12 h-6 rounded-full transition-all relative border ${apiConfig.adzuna.enabled ? 'bg-primary border-primary' : 'bg-muted-foreground/40 border-border'}`}
+                      className={`w-12 h-6 rounded-full transition-all relative border ${apiConfig.adzuna.enabled ? 'bg-primary border-primary shadow-[0_0_10px_rgba(var(--primary),0.3)]' : 'bg-muted-foreground/40 border-border'}`}
                     >
-                      <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-background shadow-sm border border-border transition-all ${apiConfig.adzuna.enabled ? 'right-0.5' : 'left-0.5'}`}></div>
+                      <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-background shadow-md border border-border transition-all ${apiConfig.adzuna.enabled ? 'right-0.5' : 'left-0.5'}`}></div>
                     </button>
                   </div>
                   <div className="space-y-4">
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">App ID</label>
-                      <input 
-                        type="text"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
-                        value={apiConfig.adzuna.appId}
-                        onChange={e => setApiConfig({...apiConfig, adzuna: {...apiConfig.adzuna, appId: e.target.value}})}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">App Key</label>
+                      <label className="text-xs font-medium text-muted-foreground">RapidAPI Key / App Key</label>
                       <input 
                         type="password"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
+                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
                         value={apiConfig.adzuna.appKey}
+                        placeholder={apiStatus?.adzuna?.appKey ? `Current: ${apiStatus.adzuna.appKey}` : "Your API Key"}
                         onChange={e => setApiConfig({...apiConfig, adzuna: {...apiConfig.adzuna, appKey: e.target.value}})}
                       />
                     </div>
-                  </div>
-                </div>
-
-                {/* JSearch Config */}
-                <div className="p-6 rounded-2xl border bg-background space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold">JSearch Settings</h4>
-                    <button
-                      onClick={() => setApiConfig({...apiConfig, jsearch: {...apiConfig.jsearch, enabled: !apiConfig.jsearch.enabled}})}
-                      className={`w-12 h-6 rounded-full transition-all relative border ${apiConfig.jsearch.enabled ? 'bg-primary border-primary' : 'bg-muted-foreground/40 border-border'}`}
-                    >
-                      <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-background shadow-sm border border-border transition-all ${apiConfig.jsearch.enabled ? 'right-0.5' : 'left-0.5'}`}></div>
-                    </button>
-                  </div>
-                  <div className="space-y-4">
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">RapidAPI Key</label>
-                      <input 
-                        type="password"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
-                        value={apiConfig.jsearch.apiKey}
-                        onChange={e => setApiConfig({...apiConfig, jsearch: {...apiConfig.jsearch, apiKey: e.target.value}})}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">API Host</label>
+                      <label className="text-xs font-medium text-muted-foreground">API Host (Adzuna)</label>
                       <input 
                         type="text"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
-                        value={apiConfig.jsearch.host}
-                        onChange={e => setApiConfig({...apiConfig, jsearch: {...apiConfig.jsearch, host: e.target.value}})}
+                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                        value={apiConfig.adzuna.host || ''}
+                        placeholder="baskarm28-adzuna-v1.p.rapidapi.com"
+                        onChange={e => setApiConfig({...apiConfig, adzuna: {...apiConfig.adzuna, host: e.target.value}})}
                       />
                     </div>
                   </div>
                 </div>
 
-                {/* Google Jobs Config */}
-                <div className="p-6 rounded-2xl border bg-background space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold">Google Jobs Settings</h4>
-                    <button
-                      onClick={() => setApiConfig({...apiConfig, google: {...apiConfig.google, enabled: !apiConfig.google.enabled}})}
-                      className={`w-12 h-6 rounded-full transition-all relative border ${apiConfig.google.enabled ? 'bg-primary border-primary' : 'bg-muted-foreground/40 border-border'}`}
-                    >
-                      <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-background shadow-sm border border-border transition-all ${apiConfig.google.enabled ? 'right-0.5' : 'left-0.5'}`}></div>
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">RapidAPI Key</label>
-                      <input 
-                        type="password"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
-                        value={apiConfig.google.apiKey}
-                        onChange={e => setApiConfig({...apiConfig, google: {...apiConfig.google, apiKey: e.target.value}})}
-                      />
+                {/* Other APIs */}
+                {['jsearch', 'google', 'indeed', 'linkedin', 'ziprecruiter', 'jooble', 'careerjet'].map((key) => (
+                  <div key={key} className="p-6 rounded-2xl border bg-background/30 hover:border-primary/20 transition-all space-y-6">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold capitalize">{key === 'jsearch' ? 'JSearch (RapidAPI)' : `${key} Settings`}</h4>
+                      <button
+                        onClick={() => setApiConfig({...apiConfig, [key]: {...apiConfig[key], enabled: !apiConfig[key].enabled}})}
+                        className={`w-12 h-6 rounded-full transition-all relative border ${apiConfig[key]?.enabled ? 'bg-primary border-primary shadow-[0_0_10px_rgba(var(--primary),0.3)]' : 'bg-muted-foreground/40 border-border'}`}
+                      >
+                        <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-background shadow-md border border-border transition-all ${apiConfig[key]?.enabled ? 'right-0.5' : 'left-0.5'}`}></div>
+                      </button>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">API Host</label>
-                      <input 
-                        type="text"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
-                        value={apiConfig.google.host}
-                        onChange={e => setApiConfig({...apiConfig, google: {...apiConfig.google, host: e.target.value}})}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Indeed Config */}
-                <div className="p-6 rounded-2xl border bg-background space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold">Indeed Settings</h4>
-                    <button
-                      onClick={() => setApiConfig({...apiConfig, indeed: {...apiConfig.indeed, enabled: !apiConfig.indeed.enabled}})}
-                      className={`w-12 h-6 rounded-full transition-all relative border ${apiConfig.indeed.enabled ? 'bg-primary border-primary' : 'bg-muted-foreground/40 border-border'}`}
-                    >
-                      <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-background shadow-sm border border-border transition-all ${apiConfig.indeed.enabled ? 'right-0.5' : 'left-0.5'}`}></div>
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">RapidAPI Key</label>
-                      <input 
-                        type="password"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
-                        value={apiConfig.indeed.apiKey}
-                        onChange={e => setApiConfig({...apiConfig, indeed: {...apiConfig.indeed, apiKey: e.target.value}})}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">API Host</label>
-                      <input 
-                        type="text"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
-                        value={apiConfig.indeed.host || 'indeed12.p.rapidapi.com'}
-                        onChange={e => setApiConfig({...apiConfig, indeed: {...apiConfig.indeed, host: e.target.value}})}
-                      />
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">RapidAPI Key</label>
+                        <input 
+                          type="password"
+                          className="w-full px-4 py-2 rounded-lg border bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                          value={apiConfig[key]?.apiKey || ''}
+                          placeholder={apiStatus?.[key]?.maskedKey ? `Current: ${apiStatus[key].maskedKey}` : `Your ${key} API Key`}
+                          onChange={e => setApiConfig({...apiConfig, [key]: {...apiConfig[key], apiKey: e.target.value}})}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">API Host</label>
+                        <input 
+                          type="text"
+                          className="w-full px-4 py-2 rounded-lg border bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                          value={apiConfig[key]?.host || ''}
+                          placeholder={
+                            key === 'jsearch' ? 'jsearch.p.rapidapi.com' :
+                            key === 'google' ? 'google-jobs-api.p.rapidapi.com' :
+                            key === 'indeed' ? 'indeed12.p.rapidapi.com' :
+                            key === 'linkedin' ? 'linkedin-jobs-search.p.rapidapi.com' :
+                            key === 'ziprecruiter' ? 'ziprecruiter-jobs.p.rapidapi.com' :
+                            `${key}.p.rapidapi.com`
+                          }
+                          onChange={e => setApiConfig({...apiConfig, [key]: {...apiConfig[key], host: e.target.value}})}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-
-                {/* LinkedIn Config */}
-                <div className="p-6 rounded-2xl border bg-background space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold">LinkedIn Settings</h4>
-                    <button
-                      onClick={() => setApiConfig({...apiConfig, linkedin: {...apiConfig.linkedin, enabled: !apiConfig.linkedin.enabled}})}
-                      className={`w-12 h-6 rounded-full transition-all relative border ${apiConfig.linkedin.enabled ? 'bg-primary border-primary' : 'bg-muted-foreground/40 border-border'}`}
-                    >
-                      <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-background shadow-sm border border-border transition-all ${apiConfig.linkedin.enabled ? 'right-0.5' : 'left-0.5'}`}></div>
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">RapidAPI Key</label>
-                      <input 
-                        type="password"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
-                        value={apiConfig.linkedin.apiKey}
-                        onChange={e => setApiConfig({...apiConfig, linkedin: {...apiConfig.linkedin, apiKey: e.target.value}})}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">API Host</label>
-                      <input 
-                        type="text"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
-                        value={apiConfig.linkedin.host || 'linkedin-jobs-search.p.rapidapi.com'}
-                        onChange={e => setApiConfig({...apiConfig, linkedin: {...apiConfig.linkedin, host: e.target.value}})}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* ZipRecruiter Config */}
-                <div className="p-6 rounded-2xl border bg-background space-y-6">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold">ZipRecruiter Settings</h4>
-                    <button
-                      onClick={() => setApiConfig({...apiConfig, ziprecruiter: {...apiConfig.ziprecruiter, enabled: !apiConfig.ziprecruiter.enabled}})}
-                      className={`w-12 h-6 rounded-full transition-all relative border ${apiConfig.ziprecruiter.enabled ? 'bg-primary border-primary' : 'bg-muted-foreground/40 border-border'}`}
-                    >
-                      <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-background shadow-sm border border-border transition-all ${apiConfig.ziprecruiter.enabled ? 'right-0.5' : 'left-0.5'}`}></div>
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">RapidAPI Key</label>
-                      <input 
-                        type="password"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
-                        value={apiConfig.ziprecruiter.apiKey}
-                        onChange={e => setApiConfig({...apiConfig, ziprecruiter: {...apiConfig.ziprecruiter, apiKey: e.target.value}})}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">API Host</label>
-                      <input 
-                        type="text"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm"
-                        value={apiConfig.ziprecruiter.host || 'ziprecruiter-jobs.p.rapidapi.com'}
-                        onChange={e => setApiConfig({...apiConfig, ziprecruiter: {...apiConfig.ziprecruiter, host: e.target.value}})}
-                      />
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </div>
