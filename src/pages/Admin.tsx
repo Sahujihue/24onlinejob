@@ -1444,7 +1444,10 @@ export default function Admin() {
                   <h3 className="text-xl font-bold">API Configuration</h3>
                   <p className="text-sm text-muted-foreground">Configure your individual API keys and endpoints.</p>
                 </div>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  <p className="text-xs text-muted-foreground mr-4 hidden md:block">
+                    <span className="font-bold text-amber-500">Pro Tip:</span> Save your settings before testing connections to use the latest keys.
+                  </p>
                   {saveSuccess === 'API configuration saved successfully!' && (
                     <span className="text-sm font-bold text-emerald-500 flex items-center gap-1 animate-in fade-in slide-in-from-right-4">
                       <CheckCircle2 size={16} /> API Settings Saved!
@@ -1453,7 +1456,7 @@ export default function Admin() {
                   <button 
                     onClick={() => updateApiConfig(apiConfig)}
                     disabled={isSaving}
-                    className="bg-primary text-primary-foreground px-6 py-2 rounded-lg font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 flex items-center gap-2 disabled:opacity-50"
+                    className="bg-primary text-primary-foreground px-6 py-2 rounded-lg font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 flex items-center gap-2 disabled:opacity-50 whitespace-nowrap"
                   >
                     {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                     {isSaving ? 'Saving...' : 'Save API Settings'}
@@ -1473,28 +1476,41 @@ export default function Admin() {
                       <div className={`absolute top-0.5 w-4.5 h-4.5 rounded-full bg-background shadow-md border border-border transition-all ${apiConfig.adzuna.enabled ? 'right-0.5' : 'left-0.5'}`}></div>
                     </button>
                   </div>
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">RapidAPI Key / App Key</label>
-                      <input 
-                        type="password"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                        value={apiConfig.adzuna.appKey}
-                        placeholder={apiStatus?.adzuna?.appKey ? `Current: ${apiStatus.adzuna.appKey}` : "Your API Key"}
-                        onChange={e => setApiConfig({...apiConfig, adzuna: {...apiConfig.adzuna, appKey: e.target.value}})}
-                      />
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">App ID (Required for Adzuna API)</label>
+                          <input 
+                            type="text"
+                            className="w-full px-4 py-2 rounded-lg border bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                            value={apiConfig.adzuna.appId || ''}
+                            placeholder="Your Adzuna App ID"
+                            onChange={e => setApiConfig({...apiConfig, adzuna: {...apiConfig.adzuna, appId: e.target.value}})}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-muted-foreground">App Key / RapidAPI Key</label>
+                          <input 
+                            type="password"
+                            className="w-full px-4 py-2 rounded-lg border bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                            value={apiConfig.adzuna.appKey || ''}
+                            placeholder="Your Adzuna App Key"
+                            onChange={e => setApiConfig({...apiConfig, adzuna: {...apiConfig.adzuna, appKey: e.target.value}})}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-medium text-muted-foreground">API Host (Optional - default: api.adzuna.com)</label>
+                        <input 
+                          type="text"
+                          className="w-full px-4 py-2 rounded-lg border bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                          value={apiConfig.adzuna.host || ''}
+                          placeholder="e.g. baskarm28-adzuna-v1.p.rapidapi.com"
+                          onChange={e => setApiConfig({...apiConfig, adzuna: {...apiConfig.adzuna, host: e.target.value}})}
+                        />
+                        <p className="text-[10px] text-muted-foreground">Leave default for official Adzuna API. Set to RapidAPI host if using proxy.</p>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">API Host (Adzuna)</label>
-                      <input 
-                        type="text"
-                        className="w-full px-4 py-2 rounded-lg border bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
-                        value={apiConfig.adzuna.host || ''}
-                        placeholder="baskarm28-adzuna-v1.p.rapidapi.com"
-                        onChange={e => setApiConfig({...apiConfig, adzuna: {...apiConfig.adzuna, host: e.target.value}})}
-                      />
-                    </div>
-                  </div>
                 </div>
 
                 {/* Other APIs */}

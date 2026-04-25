@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
+import cors from 'cors';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import axios from 'axios';
@@ -213,7 +214,61 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
+  app.use(cors());
   app.use(express.json());
+  app.use(cors({ origin: '*' }));
+
+  // Combined Jobs Aggregator - Optimizes frontend by doing 1 request instead of 8
+  app.get('/api/jobs/all', async (req, res) => {
+    const { query, what, where, location, country = 'us', page = 1 } = req.query;
+    
+    // Normalize params for different APIs
+    const adzunaParams = { country, what: what || query, where: where || location, page };
+    const rapidParams = { query: query || what, location: location || where, country, page };
+
+    console.log(`[Aggregator] Starting parallel fetch for query: "${query || what}"`);
+
+    try {
+      // Fetch from key APIs in parallel
+      const [adzunaRes, jsearchRes, googleRes] = await Promise.allSettled([
+        axios.get(`http://localhost:${PORT}/api/jobs/adzuna`, { params: adzunaParams }),
+        axios.get(`http://localhost:${PORT}/api/jobs/jsearch`, { params: rapidParams }),
+        axios.get(`http://localhost:${PORT}/api/jobs/google`, { params: rapidParams })
+      ]);
+
+      const results: any[] = [];
+      const sources: string[] = [];
+
+      // Extract results safely from each settlement
+      if (adzunaRes.status === 'fulfilled') {
+        const data = adzunaRes.value.data?.results || [];
+        results.push(...data);
+        if (data.length > 0) sources.push('Adzuna');
+      }
+      
+      if (jsearchRes.status === 'fulfilled') {
+        const data = jsearchRes.value.data?.data || [];
+        results.push(...data);
+        if (data.length > 0) sources.push('JSearch');
+      }
+
+      if (googleRes.status === 'fulfilled') {
+        const data = googleRes.value.data?.data || [];
+        results.push(...data);
+        if (data.length > 0) sources.push('Google');
+      }
+
+      res.json({
+        success: true,
+        count: results.length,
+        sources,
+        results
+      });
+    } catch (error: any) {
+      console.error('[Aggregator] Failed to aggregate jobs:', error.message);
+      res.status(500).json({ error: 'Failed to fetch combined job results', details: error.message });
+    }
+  });
 
   // Stripe Checkout Session Endpoint
   app.post('/api/create-checkout-session', async (req, res) => {
@@ -270,27 +325,24 @@ async function startServer() {
     const getStatus = (key: string, defaultHost: string) => {
       const config = apiSettings[key] || {};
       const envKey = process.env.RAPIDAPI_KEY;
-      const hasFirestoreKey = !!config.apiKey;
-      const hasEnvKey = !!envKey;
+      const hasFirestoreKey = !!config.apiKey || (key === 'adzuna' && !!config.appKey);
+      const hasEnvKey = !!envKey || (key === 'adzuna' && !!process.env.ADZUNA_APP_KEY);
       
+      const host = config.host || (key === 'jsearch' ? (process.env.RAPIDAPI_HOST || defaultHost) : defaultHost);
+      const apiKey = config.apiKey || config.appKey || (key === 'adzuna' ? process.env.ADZUNA_APP_KEY : null) || envKey;
+
       return {
-        configured: hasFirestoreKey || hasEnvKey,
-        source: hasFirestoreKey ? 'Firestore' : (hasEnvKey ? 'Environment' : 'None'),
-        host: config.host || process.env.RAPIDAPI_HOST || defaultHost,
+        configured: !!apiKey,
+        source: (config.apiKey || config.appKey) ? 'Firestore' : (apiKey ? 'Environment' : 'None'),
+        host: host,
         enabled: config.enabled !== false,
-        // Only return masked key if it's from Firestore
-        maskedKey: config.apiKey ? `${config.apiKey.substring(0, 4)}...${config.apiKey.substring(config.apiKey.length - 4)}` : (hasEnvKey ? '•••••••• (Env)' : null)
+        maskedKey: apiKey ? maskKey(apiKey) : null,
+        appId: key === 'adzuna' ? (config.appId || process.env.ADZUNA_APP_ID || null) : null
       };
     };
 
     const status = {
-      adzuna: {
-        configured: !!(apiSettings.adzuna?.appKey || process.env.ADZUNA_APP_KEY),
-        source: apiSettings.adzuna?.appKey ? 'Firestore' : (process.env.ADZUNA_APP_KEY ? 'Environment' : 'None'),
-        appKey: apiSettings.adzuna?.appKey ? `${apiSettings.adzuna.appKey.substring(0, 4)}...` : null,
-        enabled: apiSettings.adzuna?.enabled !== false,
-        host: apiSettings.adzuna?.host || 'api.adzuna.com'
-      },
+      adzuna: getStatus('adzuna', 'api.adzuna.com'),
       jsearch: getStatus('jsearch', 'jsearch.p.rapidapi.com'),
       google: getStatus('google', 'google-jobs-api.p.rapidapi.com'),
       indeed: getStatus('indeed', 'indeed12.p.rapidapi.com'),
@@ -308,7 +360,7 @@ async function startServer() {
     const apiSettings = await getApiSettings();
     
     const appId = apiSettings.adzuna?.appId || process.env.ADZUNA_APP_ID;
-    const appKey = apiSettings.adzuna?.appKey || process.env.ADZUNA_APP_KEY;
+    const appKey = apiSettings.adzuna?.appKey || process.env.ADZUNA_APP_KEY || process.env.RAPIDAPI_KEY;
     const enabled = apiSettings.adzuna?.enabled !== false;
 
     if (!enabled) {
@@ -324,17 +376,25 @@ async function startServer() {
       });
     }
 
-    if (!appId || !appKey) {
-      return res.status(500).json({ error: 'Adzuna credentials missing' });
+    const apiHostRaw = apiSettings.adzuna?.host || 'api.adzuna.com';
+    const apiHost = apiHostRaw.replace('https://', '').replace('http://', '').split('/')[0];
+    const isRapidApi = apiHost.includes('rapidapi');
+
+    // If using official Adzuna, we MUST have appId and appKey.
+    // If using RapidAPI, we only MUST have appKey (which can be the global RAPIDAPI_KEY).
+    if (!isRapidApi && (!appId || !appKey)) {
+      return res.status(500).json({ error: 'Adzuna credentials (App ID and App Key) missing' });
+    }
+    
+    if (isRapidApi && !appKey) {
+      return res.status(500).json({ error: 'RapidAPI Key missing for Adzuna' });
     }
 
     try {
       const countryCode = (country && String(country).trim()) ? String(country).toLowerCase() : 'gb';
       const pageNum = Number(page) || 1;
       
-      const apiHost = apiSettings.adzuna?.host || 'api.adzuna.com';
-      
-      if (apiHost.includes('rapidapi')) {
+      if (isRapidApi) {
         // RapidAPI version of Adzuna
         const url = `https://${apiHost}/jobs/${countryCode}/search/${pageNum}`;
         const params: any = {
@@ -390,21 +450,25 @@ async function startServer() {
 
       const errorData = error.response?.data;
       
+      let errorMessage = 'Failed to fetch jobs from Adzuna';
+      let errorDetails = errorData || error.message;
+
+      if (status === 403) {
+        errorMessage = 'Adzuna API Access Forbidden (403)';
+        errorDetails = 'Please check your API Key / RapidAPI Key and ensure you are subscribed to the Adzuna API on RapidAPI (if using proxy).';
+        console.error('Adzuna 403 Forbidden. Key used:', maskKey(appKey || ''));
+      }
+
       console.error('Adzuna API Error:', {
         status,
         message: error.message,
-        // Don't log huge HTML blobs
-        details: typeof errorData === 'string' && errorData.includes('<!DOCTYPE html>') 
-          ? 'HTML Error Page (Service Unavailable)' 
-          : errorData
+        details: errorDetails
       });
 
       res.status(status).json({ 
-        error: 'Failed to fetch jobs from Adzuna',
+        error: errorMessage,
         status,
-        details: typeof errorData === 'string' && errorData.includes('<!DOCTYPE html>') 
-          ? 'Service temporarily unavailable (503)' 
-          : errorData || error.message
+        details: errorDetails
       });
     }
   });
@@ -426,7 +490,8 @@ async function startServer() {
     const keySource = apiSettings.jsearch?.apiKey ? 'Firestore' : (process.env.RAPIDAPI_KEY ? 'Environment' : 'None');
     console.log(`JSearch using API Key from: ${keySource} (Masked: ${maskKey(apiKey)})`);
     
-    const apiHost = apiSettings.jsearch?.host || process.env.RAPIDAPI_HOST || 'jsearch.p.rapidapi.com';
+    const apiHostRaw = apiSettings.jsearch?.host || process.env.RAPIDAPI_HOST || 'jsearch.p.rapidapi.com';
+    const apiHost = apiHostRaw.replace('https://', '').replace('http://', '').split('/')[0];
     const enabled = apiSettings.jsearch?.enabled !== false;
 
     if (!enabled) {

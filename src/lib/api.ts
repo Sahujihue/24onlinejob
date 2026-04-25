@@ -1,7 +1,7 @@
-import axios from 'axios';
 import { Job } from '../types';
 import { db } from '../firebase';
 import { collection, query, getDocs, orderBy, limit, where } from 'firebase/firestore';
+import apiService from './apiService';
 
 export async function fetchManualJobs(params: {
   query?: string;
@@ -45,32 +45,23 @@ export async function fetchAdzunaJobs(params: {
   where?: string;
   page?: number;
 }): Promise<Job[]> {
-  try {
-    const response = await axios.get('/api/jobs/adzuna', { params });
-    const results = response.data.results || [];
-    return results.map((item: any) => ({
-      id: `adzuna-${item.id}`,
-      title: item.title,
-      company: item.company.display_name,
-      location: item.location.display_name,
-      country: params.country || 'gb',
-      description: item.description,
-      applyUrl: item.redirect_url,
-      createdAt: item.created,
-      source: 'Adzuna',
-      salary: item.salary_min ? `${item.salary_currency || '$'} ${item.salary_min} - ${item.salary_max}` : 'Not specified',
-      salaryMin: item.salary_min,
-      salaryMax: item.salary_max,
-      currency: item.salary_currency,
-    }));
-  } catch (error: any) {
-    const serverError = error.response?.data;
-    console.error('Error fetching Adzuna jobs:', {
-      message: error.message,
-      details: serverError
-    });
-    return [];
-  }
+  const data = await apiService.fetchAdzuna(params);
+  const results = data.results || [];
+  return results.map((item: any) => ({
+    id: `adzuna-${item.id}`,
+    title: item.title,
+    company: item.company.display_name,
+    location: item.location.display_name,
+    country: params.country || 'gb',
+    description: item.description,
+    applyUrl: item.redirect_url,
+    createdAt: item.created,
+    source: 'Adzuna',
+    salary: item.salary_min ? `${item.salary_currency || '$'} ${item.salary_min} - ${item.salary_max}` : 'Not specified',
+    salaryMin: item.salary_min,
+    salaryMax: item.salary_max,
+    currency: item.salary_currency,
+  }));
 }
 
 export async function fetchJSearchJobs(params: {
@@ -79,31 +70,22 @@ export async function fetchJSearchJobs(params: {
   country?: string;
   date_posted?: string;
 }): Promise<Job[]> {
-  try {
-    const response = await axios.get('/api/jobs/jsearch', { params });
-    const results = response.data.data || [];
-    return results.map((item: any) => ({
-      id: `jsearch-${item.job_id}`,
-      title: item.job_title,
-      company: item.employer_name,
-      location: `${item.job_city || ''} ${item.job_country || ''}`,
-      country: item.job_country,
-      description: item.job_description,
-      applyUrl: item.job_apply_link,
-      createdAt: item.job_posted_at_datetime_utc,
-      source: 'JSearch',
-      jobType: item.job_employment_type,
-      salary: item.job_min_salary ? `${item.job_salary_currency || '$'} ${item.job_min_salary} - ${item.job_max_salary}` : (item.job_salary_period ? `${item.job_salary_currency || '$'} ${item.job_max_salary}/${item.job_salary_period}` : 'Not specified'),
-      currency: item.job_salary_currency,
-    }));
-  } catch (error: any) {
-    const serverError = error.response?.data;
-    console.error('Error fetching JSearch jobs:', {
-      message: error.message,
-      details: serverError
-    });
-    return [];
-  }
+  const data = await apiService.fetchJSearch(params);
+  const results = data.data || [];
+  return results.map((item: any) => ({
+    id: `jsearch-${item.job_id}`,
+    title: item.job_title,
+    company: item.employer_name,
+    location: `${item.job_city || ''} ${item.job_country || ''}`,
+    country: item.job_country,
+    description: item.job_description,
+    applyUrl: item.job_apply_link,
+    createdAt: item.job_posted_at_datetime_utc,
+    source: 'JSearch',
+    jobType: item.job_employment_type,
+    salary: item.job_min_salary ? `${item.job_salary_currency || '$'} ${item.job_min_salary} - ${item.job_max_salary}` : (item.job_salary_period ? `${item.job_salary_currency || '$'} ${item.job_max_salary}/${item.job_salary_period}` : 'Not specified'),
+    currency: item.job_salary_currency,
+  }));
 }
 
 export async function fetchGoogleJobs(params: {
@@ -111,24 +93,19 @@ export async function fetchGoogleJobs(params: {
   location?: string;
   page?: number;
 }): Promise<Job[]> {
-  try {
-    const response = await axios.get('/api/jobs/google', { params });
-    const results = response.data.data || [];
-    return results.map((item: any) => ({
-      id: `google-${item.job_id || Math.random().toString(36).substr(2, 9)}`,
-      title: item.title,
-      company: item.company_name,
-      location: item.location,
-      country: params.location || 'Global',
-      description: item.description,
-      applyUrl: item.apply_link || item.job_link,
-      createdAt: item.posted_at || new Date().toISOString(),
-      source: 'Google Jobs',
-    }));
-  } catch (error: any) {
-    console.error('Error fetching Google jobs:', error.message);
-    return [];
-  }
+  const data = await apiService.fetchGoogle(params);
+  const results = data.data || [];
+  return results.map((item: any) => ({
+    id: `google-${item.job_id || Math.random().toString(36).substr(2, 9)}`,
+    title: item.title,
+    company: item.company_name,
+    location: item.location,
+    country: params.location || 'Global',
+    description: item.description,
+    applyUrl: item.apply_link || item.job_link,
+    createdAt: item.posted_at || new Date().toISOString(),
+    source: 'Google Jobs',
+  }));
 }
 
 export async function fetchIndeedJobs(params: {
@@ -136,25 +113,20 @@ export async function fetchIndeedJobs(params: {
   location?: string;
   page?: number;
 }): Promise<Job[]> {
-  try {
-    const response = await axios.get('/api/jobs/indeed', { params });
-    const results = Array.isArray(response.data) ? response.data : (response.data.results || response.data.data || []);
-    return results.map((item: any) => ({
-      id: `indeed-${item.id || Math.random().toString(36).substr(2, 9)}`,
-      title: item.job_title || item.title,
-      company: item.company_name || item.company,
-      location: item.location,
-      country: params.location || 'Global',
-      description: item.description,
-      applyUrl: item.url || item.apply_url,
-      createdAt: item.date_posted || new Date().toISOString(),
-      source: 'Indeed',
-      salary: item.salary || 'Not specified',
-    }));
-  } catch (error: any) {
-    console.error('Error fetching Indeed jobs:', error.message);
-    return [];
-  }
+  const data = await apiService.fetchIndeed(params);
+  const results = Array.isArray(data) ? data : (data.results || data.data || []);
+  return results.map((item: any) => ({
+    id: `indeed-${item.id || Math.random().toString(36).substr(2, 9)}`,
+    title: item.job_title || item.title,
+    company: item.company_name || item.company,
+    location: item.location,
+    country: params.location || 'Global',
+    description: item.description,
+    applyUrl: item.url || item.apply_url,
+    createdAt: item.date_posted || new Date().toISOString(),
+    source: 'Indeed',
+    salary: item.salary || 'Not specified',
+  }));
 }
 
 export async function fetchLinkedInJobs(params: {
@@ -162,24 +134,19 @@ export async function fetchLinkedInJobs(params: {
   location?: string;
   page?: number;
 }): Promise<Job[]> {
-  try {
-    const response = await axios.get('/api/jobs/linkedin', { params });
-    const results = Array.isArray(response.data) ? response.data : (response.data.data || response.data.results || []);
-    return results.map((item: any) => ({
-      id: `linkedin-${item.id || Math.random().toString(36).substr(2, 9)}`,
-      title: item.job_title || item.title,
-      company: item.company_name || item.company,
-      location: item.location,
-      country: params.location || 'Global',
-      description: item.description,
-      applyUrl: item.linkedin_url || item.url,
-      createdAt: item.posted_date || new Date().toISOString(),
-      source: 'LinkedIn',
-    }));
-  } catch (error: any) {
-    console.error('Error fetching LinkedIn jobs:', error.message);
-    return [];
-  }
+  const data = await apiService.fetchLinkedIn(params);
+  const results = Array.isArray(data) ? data : (data.data || data.results || []);
+  return results.map((item: any) => ({
+    id: `linkedin-${item.id || Math.random().toString(36).substr(2, 9)}`,
+    title: item.job_title || item.title,
+    company: item.company_name || item.company,
+    location: item.location,
+    country: params.location || 'Global',
+    description: item.description,
+    applyUrl: item.linkedin_url || item.url,
+    createdAt: item.posted_date || new Date().toISOString(),
+    source: 'LinkedIn',
+  }));
 }
 
 export async function fetchZipRecruiterJobs(params: {
@@ -187,24 +154,19 @@ export async function fetchZipRecruiterJobs(params: {
   location?: string;
   page?: number;
 }): Promise<Job[]> {
-  try {
-    const response = await axios.get('/api/jobs/ziprecruiter', { params });
-    const results = response.data.jobs || [];
-    return results.map((item: any) => ({
-      id: `zip-${item.id || Math.random().toString(36).substr(2, 9)}`,
-      title: item.name || item.title,
-      company: item.hiring_company?.name || item.company,
-      location: item.location,
-      country: params.location || 'Global',
-      description: item.snippet || item.description,
-      applyUrl: item.url,
-      createdAt: item.posted_time_friendly || new Date().toISOString(),
-      source: 'ZipRecruiter',
-    }));
-  } catch (error: any) {
-    console.error('Error fetching ZipRecruiter jobs:', error.message);
-    return [];
-  }
+  const data = await apiService.fetchZipRecruiter(params);
+  const results = data.jobs || [];
+  return results.map((item: any) => ({
+    id: `zip-${item.id || Math.random().toString(36).substr(2, 9)}`,
+    title: item.name || item.title,
+    company: item.hiring_company?.name || item.company,
+    location: item.location,
+    country: params.location || 'Global',
+    description: item.snippet || item.description,
+    applyUrl: item.url,
+    createdAt: item.posted_time_friendly || new Date().toISOString(),
+    source: 'ZipRecruiter',
+  }));
 }
 
 export async function fetchJoobleJobs(params: {
@@ -212,24 +174,19 @@ export async function fetchJoobleJobs(params: {
   location?: string;
   page?: number;
 }): Promise<Job[]> {
-  try {
-    const response = await axios.get('/api/jobs/jooble', { params });
-    const results = response.data.jobs || [];
-    return results.map((item: any) => ({
-      id: `jooble-${item.id || Math.random().toString(36).substr(2, 9)}`,
-      title: item.title,
-      company: item.company,
-      location: item.location,
-      country: params.location || 'Global',
-      description: item.snippet || item.description,
-      applyUrl: item.link,
-      createdAt: item.updated || new Date().toISOString(),
-      source: 'Jooble',
-    }));
-  } catch (error: any) {
-    console.error('Error fetching Jooble jobs:', error.message);
-    return [];
-  }
+  const data = await apiService.fetchJooble(params);
+  const results = data.jobs || [];
+  return results.map((item: any) => ({
+    id: `jooble-${item.id || Math.random().toString(36).substr(2, 9)}`,
+    title: item.title,
+    company: item.company,
+    location: item.location,
+    country: params.location || 'Global',
+    description: item.snippet || item.description,
+    applyUrl: item.link,
+    createdAt: item.updated || new Date().toISOString(),
+    source: 'Jooble',
+  }));
 }
 
 export async function fetchCareerjetJobs(params: {
@@ -237,23 +194,70 @@ export async function fetchCareerjetJobs(params: {
   location?: string;
   page?: number;
 }): Promise<Job[]> {
+  const data = await apiService.fetchCareerjet(params);
+  const results = data.jobs || [];
+  return results.map((item: any) => ({
+    id: `careerjet-${item.url || Math.random().toString(36).substr(2, 9)}`,
+    title: item.title,
+    company: item.company,
+    location: item.locations,
+    country: params.location || 'Global',
+    description: item.description,
+    applyUrl: item.url,
+    createdAt: item.date || new Date().toISOString(),
+    source: 'Careerjet',
+  }));
+}
+
+// Optimized fetching strategy using backend aggregation
+export async function fetchAggregatedJobs(params: {
+  query: string;
+  country?: string;
+  page?: number;
+}): Promise<{ results: Job[], sources: string[] }> {
   try {
-    const response = await axios.get('/api/jobs/careerjet', { params });
-    const results = response.data.jobs || [];
-    return results.map((item: any) => ({
-      id: `careerjet-${item.url || Math.random().toString(36).substr(2, 9)}`,
-      title: item.title,
-      company: item.company,
-      location: item.locations,
-      country: params.location || 'Global',
-      description: item.description,
-      applyUrl: item.url,
-      createdAt: item.date || new Date().toISOString(),
-      source: 'Careerjet',
-    }));
-  } catch (error: any) {
-    console.error('Error fetching Careerjet jobs:', error.message);
-    return [];
+    const data = await apiService.fetchAllJobs(params);
+    
+    if (!data || !data.success) {
+      console.warn('Backend aggregation returned unsuccessful response:', data?.error);
+      return { results: [], sources: [] };
+    }
+
+    const rawResults = data.results || [];
+    
+    // Process results to normalize them for the UI
+    const results = rawResults.map((item: any) => {
+      // Logic from individual fetchers based on source / structure
+      // Adzuna uses item.redirect_url, JSearch uses item.job_id, Google uses item.job_id or item.title
+      const source = item.source || 
+                    (item.job_id && item.employer_name ? 'JSearch' : 
+                    (item.redirect_url ? 'Adzuna' : 
+                    (item.via ? 'Google Jobs' : 'Job Board')));
+      
+      return {
+        id: item.id || item.job_id || `job-${Math.random().toString(36).substr(2, 9)}`,
+        title: item.title || item.job_title || 'Job Opportunity',
+        company: item.company?.display_name || item.employer_name || item.company_name || item.company || 'Confidential',
+        location: item.location?.display_name || item.location || `${item.job_city || ''} ${item.job_country || ''}`.trim() || 'Remote',
+        country: item.job_country || item.location?.area?.[0] || params.country || 'Global',
+        description: item.description || item.job_description || item.snippet || 'No description provided.',
+        applyUrl: item.redirect_url || item.job_apply_link || item.apply_link || item.job_link || item.url || '#',
+        createdAt: item.created || item.job_posted_at_datetime_utc || item.posted_at || item.date_posted || item.posted_time_friendly || new Date().toISOString(),
+        source: source,
+        salary: item.salary_min ? `${item.salary_currency || '$'} ${item.salary_min} - ${item.salary_max}` : (item.salary || 'Not specified'),
+        salaryMin: item.salary_min || item.job_min_salary,
+        salaryMax: item.salary_max || item.job_max_salary,
+        jobType: item.jobType || item.job_employment_type || (item.contract_type === 'full_time' ? 'Full-time' : undefined),
+      } as Job;
+    });
+
+    return {
+      results: results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+      sources: data.sources || []
+    };
+  } catch (error) {
+    console.error('Error fetching aggregated jobs:', error);
+    return { results: [], sources: [] };
   }
 }
 
@@ -266,24 +270,11 @@ export async function fetchAllJobs(params: {
   jobType?: string;
   experienceLevel?: string;
 }): Promise<Job[]> {
-  const [adzuna, jsearch, google, indeed, linkedin, zip, jooble, careerjet, manual] = await Promise.all([
-    fetchAdzunaJobs({ country: params.country, what: params.query, page: params.page }),
-    fetchJSearchJobs({ 
-      query: params.query, 
-      country: params.country || 'us', 
-      page: params.page,
-      date_posted: 'all'
-    }),
-    fetchGoogleJobs({ query: params.query, location: params.country, page: params.page }),
-    fetchIndeedJobs({ query: params.query, location: params.country, page: params.page }),
-    fetchLinkedInJobs({ query: params.query, location: params.country, page: params.page }),
-    fetchZipRecruiterJobs({ query: params.query, location: params.country, page: params.page }),
-    fetchJoobleJobs({ query: params.query, location: params.country, page: params.page }),
-    fetchCareerjetJobs({ query: params.query, location: params.country, page: params.page }),
-    fetchManualJobs({ query: params.query, country: params.country })
-  ]);
+  // Use aggregated call for speed if no specific filters are applied
+  const { results: externalJobs } = await fetchAggregatedJobs(params);
+  const manualJobs = await fetchManualJobs({ query: params.query, country: params.country });
 
-  let results = [...manual, ...adzuna, ...jsearch, ...google, ...indeed, ...linkedin, ...zip, ...jooble, ...careerjet];
+  let results = [...manualJobs, ...externalJobs];
 
   // Client-side filtering for salary
   if (params.salaryMin !== undefined) {
